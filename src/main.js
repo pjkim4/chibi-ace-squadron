@@ -680,7 +680,7 @@ function animate() {
 
     if (bossActive && bossMesh) {
         bossMesh.rotation.y += delta * 0.4;
-        if (bossMesh.position.z < -600) bossMesh.position.z += delta * 30;
+        if (bossMesh.position.z < -600) bossMesh.position.z += delta * 120; // 4X FASTER APPROACH V95.5
         else bossMesh.position.z = -600 + Math.sin(Date.now()*0.001) * 80;
     }
 
@@ -721,7 +721,7 @@ function animate() {
         setTimeout(() => { 
             advanceLevel(); 
             isLevelAdvancing = false; 
-            if (currentLevel > 0 && currentLevel % 5 === 0) spawnMothership();
+            if ((currentLevel + 1) % 5 === 0) spawnMothership(); // BOSS AT EVERY 5TH STAGE V95.5
         }, 3000); 
     }
 
@@ -1122,7 +1122,7 @@ function spawnMothership() {
     centerCore.position.set(0, 20, 0); g.add(centerCore);
 
     // V84/V94.7 CHIBI-SCALE REMOTE POSITIONING
-    g.position.set(0, 150, -1200); 
+    g.position.set(0, 150, -1000); // BROUGHT CLOSER FOR MOBILE FRUSTUM V95.5
     const bScale = isTouch ? 2.1 : 3.0; // V94.7 MOBILE BOSS SCALE (30% REDUCTION)
     g.scale.setScalar(bScale); scene.add(g);
     const pBody = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(450, 40, 450)) }); // KINEMATIC V84
@@ -1256,4 +1256,4 @@ window.handleContinue = () => {
 window.handleExit = () => {
     location.reload();
 };
-console.log("🚀 BOOT: V95.4 ONLINE - MOBILE-LOCK COCKPIT");
+console.log("🚀 BOOT: V95.5 ONLINE - DREADNOUGHT VISIBILITY FIXED");
