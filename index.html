@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Neon Surge 3D</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+      color: #fff;
+    }
+
+    #ui {
+      pointer-events: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 100;
+    }
+
+    .glass {
+      background: rgba(10, 15, 30, 0.6) !important;
+      backdrop-filter: blur(12px) saturate(150%);
+      -webkit-backdrop-filter: blur(12px) saturate(150%);
+      border: 1px solid rgba(0, 255, 255, 0.2) !important;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+      position: relative;
+      overflow: hidden;
+      pointer-events: auto;
+    }
+
+    /* Scanline pattern for glass elements */
+    .glass::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0) 0px,
+        rgba(0, 0, 0, 0.1) 1px,
+        rgba(0, 0, 0, 0) 2px
+      );
+      pointer-events: none;
+    }
+
+    #scoreboard {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      padding: 20px;
+      border-radius: 12px;
+      min-width: 250px;
+      font-family: 'Orbitron', sans-serif;
+      border-left: 4px solid #0ff;
+    }
+
+    #mutation-display {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 15px 40px;
+      border-radius: 8px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      opacity: 0;
+      transition: all 0.5s ease;
+      z-index: 150;
+      border: 1px solid #0ff;
+      background: rgba(0, 255, 255, 0.05);
+      white-space: nowrap;
+    }
+
+    .mutation-active {
+      opacity: 1 !important;
+      animation: mutation-entrance 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), mutation-pulse 2s infinite alternate;
+    }
+
+    @keyframes mutation-entrance {
+      from { transform: translateX(-50%) translateY(-20px) scale(0.8); opacity: 0; filter: blur(10px); }
+      to { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; filter: blur(0); }
+    }
+
+    @keyframes mutation-pulse {
+      from { text-shadow: 0 0 10px currentColor, 0 0 20px currentColor; box-shadow: 0 0 10px currentColor inset, 0 0 5px currentColor; }
+      to { text-shadow: 0 0 20px currentColor, 0 0 40px currentColor; box-shadow: 0 0 20px currentColor inset, 0 0 15px currentColor; }
+    }
+
+    #touch-controls {
+      display: none;
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      width: 100%;
+      height: 150px;
+      pointer-events: none;
+      z-index: 100;
+      user-select: none;
+    }
+
+    .touch-btn {
+      position: absolute;
+      background: rgba(0, 255, 255, 0.2);
+      border: 2px solid #0ff;
+      border-radius: 50%;
+      color: #0ff;
+      font-weight: bold;
+      font-size: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      pointer-events: auto;
+      user-select: none;
+    }
+
+    .touch-btn:active {
+      background: rgba(0, 255, 255, 0.5);
+    }
+
+    /* Keep original functional animations */
+    @keyframes bonus-pop {
+      0% { opacity: 0; transform: translate(-50%, -100%) scale(0.5); }
+      20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+      80% { opacity: 1; transform: translate(-50%, -60%) scale(1.0); }
+      100% { opacity: 0; transform: translate(-50%, -80%) scale(1.5); }
+    }
+
+    .bonus-active {
+      animation: bonus-pop 2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+
+    #bonus-notification {
+      position: absolute;
+      top: 30%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.5);
+      font-size: 36px;
+      font-weight: bold;
+      text-align: center;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 200;
+      text-shadow: 0 0 20px currentColor;
+    }
+
+    #crosshair {
+      width: 12px;
+      height: 12px;
+      border: 2px solid #0ff;
+      border-radius: 50%;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 10px #0ff, inset 0 0 5px #0ff;
+      pointer-events: none; /* PREVENT BLOCKING START BUTTON */
+      z-index: 200;
+    }
+
+    #vvi-container {
+      display: none; 
+    }
+
+    #instructions, #game-over {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80%;
+      max-width: 600px;
+      padding: 40px;
+      border-radius: 4px;
+      text-align: center;
+      z-index: 1000;
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 20, 25, 0.95) !important;
+      border: 2px solid rgba(0, 255, 255, 0.5) !important;
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(0, 255, 255, 0.1);
+    }
+
+    #game-over {
+      background: rgba(10, 5, 20, 0.9) !important;
+      border-color: #f0f !important;
+      box-shadow: 0 0 40px rgba(255, 0, 255, 0.3);
+    }
+
+    /* RESPONSIVE TACTICAL UI V70.1 (FIXED POSITIONING) */
+    @media (max-width: 900px) or (max-aspect-ratio: 1/1) {
+      #mobile-controls { display: block !important; }
+      #desktop-instructions { display: none !important; }
+      #mobile-instructions { display: block !important; }
+      #instructions h1 { font-size: 24px; letter-spacing: 2px; }
+      #instructions, #game-over { width: 95%; padding: 15px; }
+    }
+
+    #mobile-controls {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .touch-btn {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: rgba(0, 255, 255, 0.1);
+      border: 3px solid rgba(0, 255, 255, 0.4);
+      color: #0ff;
+      font-family: 'Orbitron';
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+      user-select: none;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+      position: absolute;
+      bottom: 40px;
+    }
+
+    #bomb-btn {
+      left: 40px;
+      border-color: rgba(255, 0, 255, 0.4);
+      color: #f0f;
+    }
+
+    #fire-btn {
+      right: 40px;
+    }
+
+    .touch-btn:active {
+      background: rgba(0, 255, 255, 0.4);
+      transform: scale(0.9);
+    }
+
+    .decision-btn {
+      padding: 15px 30px;
+      margin: 10px;
+      border: 2px solid #0ff;
+      background: rgba(0,255,255,0.1);
+      color: #0ff;
+      font-family: 'Orbitron';
+      font-weight: bold;
+      cursor: pointer;
+      pointer-events: auto;
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+    .decision-btn:active { background: #0ff; color: #000; }
+    .decision-btn.magenta { border-color: #f0f; color: #f0f; background: rgba(255,0,255,0.1); }
+    .decision-btn.magenta:active { background: #f0f; color: #000; }
+  </style>
+</head>
+
+<body>
+    <div id="ui">
+    <div id="command-header" style="display: none;"></div>
+
+    <!-- TACTICAL ORIENTATION (V51) -->
+    <div id="combat-center" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none; display: flex; align-items: center; justify-content: center;">
+       <!-- 2D CROSSHAIR PURGED IN V69 FOR IMMERSION -->
+
+       <!-- VVI TAPE (Vertical Velocity Indicator) -->
+       <div id="vvi-container" style="position: absolute; left: 35%; height: 300px; width: 40px; border-left: 2px solid rgba(0, 255, 255, 0.3); display: flex; align-items: center;">
+          <div id="vvi-tape" style="height: 4px; width: 30px; background: #0ff; position: absolute; top: 50%; transform: translateY(-50%); transition: top 0.1s;"></div>
+          <div style="position: absolute; right: 45px; color: rgba(0, 255, 255, 0.5); font-family: 'Orbitron'; font-size: 8px;">CLIMB</div>
+       </div>
+    </div>
+
+    <div id="command-orbs" style="display: none;"></div>
+
+    <div id="status-display" style="display: none;"></div>
+
+    <!-- SYSTEM DIAGNOSTIC OVERLAY -->
+    <!-- MISSION BRIEFING & ATTRACTION (V67.2) -->
+    <div id="instructions" class="glass" style="padding-bottom: 20px;">
+       <h1 style="font-family: 'Orbitron'; color: #0ff; letter-spacing: 4px; margin-bottom: 10px;">CHIBI ACE SQUADRON</h1>
+       
+       <div style="color: #ffaa00; font-weight: 900; font-size: 12px; margin-bottom: 10px;">[ TARGET IDENTIFIED: ANDOR GENESIS ]</div>
+       <img id="attraction-card" src="mothership_attraction_card_1775399907312.png" alt="TARGET IDENTIFIED" style="width:100%; max-width:380px; border:2px solid #0ff; margin-bottom:15px; border-radius:8px;">
+
+        <div id="desktop-instructions" style="margin: 10px 0; font-size: 14px; line-height: 1.4; color: #fff;">
+          MOUSE to MOVE | CLICK to FIRE | [B] to BOMB<br>
+          [Q] SYSTEM RESET / RELOAD
+        </div>
+        <div id="mobile-instructions" style="display: none; margin: 10px 0; font-size: 16px; line-height: 1.5; color: #0ff; font-weight: bold; background: rgba(0,255,255,0.1); padding: 5px; border-radius: 4px; border: 1px solid rgba(0,255,255,0.3);">
+          DRAG TO MOVE | TAP SIDE BUTTONS TO ATTACK
+        </div>
+
+       <div id="start-leaderboard" style="font-family: 'Orbitron'; margin-top:15px; border-top:1px solid rgba(0,255,255,0.2); padding-top:10px; width:100%;">
+          <div style="color: #0ff; font-size:12px; margin-bottom: 8px;">TOP PILOTS - ELITE SQUADRON</div>
+          <div id="start-leaderboard-list" style="font-size:12px; color:white;">SYSTEM LOADING...</div>
+       </div>
+
+       <button id="start-button" class="glass" style="margin-top: 20px; background: #0ff !important; color: #000 !important; border: none !important; padding: 12px 40px; font-family: 'Orbitron'; font-weight: 900; cursor: pointer; letter-spacing: 2px;">START GAME</button>
+    </div>
+
+    <canvas id="hud-overlay" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none; z-index: 400;"></canvas>
+    
+    <!-- MOBILE TACTICAL ACTIONS V69 -->
+    <div id="mobile-controls">
+        <div id="fire-btn" class="touch-btn" onmousedown="fireLaser()" ontouchstart="fireLaser()">FIRE</div>
+        <div id="bomb-btn" class="touch-btn" onmousedown="detonateBomb()" ontouchstart="detonateBomb()">BOMB</div>
+    </div>
+
+    <div id="game-over" style="display: none; z-index: 1000; pointer-events: auto;" class="glass">
+      <h1 style="color: #f0f;">MISSION ABORTED</h1>
+      <div id="final-stats"></div>
+      
+      <!-- MOBILE DECISION INTERFACE V71 -->
+      <div id="mobile-decision-ui" style="display: none; flex-direction: column; width: 100%; margin-top: 10px;">
+          <button class="decision-btn" onmousedown="handleContinue()" ontouchstart="handleContinue()">CONTINUE [C]</button>
+          <button class="decision-btn magenta" onmousedown="handleExit()" ontouchstart="handleExit()">RETIRE [E]</button>
+      </div>
+      <div id="desktop-decision-hint" style="font-size: 14px; opacity: 0.7; margin: 10px 0;">PRESS [C] to CONTINUE | [E] to EXIT</div>
+
+      <div id="name-input-container">
+        <input type="text" id="player-name" placeholder="ENTER NAME" maxlength="10" />
+        <button id="save-score-btn">SAVE SCORE</button>
+      </div>
+      <button id="replay-btn" style="display: none;">REBOOT MISSION</button>
+      <div id="leaderboard-container">
+        <h2 style="color: #0ff; margin-bottom: 5px;">MISSION LEADERS</h2>
+        <ul id="leaderboard-list"></ul>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js?v=76"></script>
+</body>
+
+</html>

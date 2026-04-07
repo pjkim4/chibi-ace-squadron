@@ -1,0 +1,800 @@
+//Neon Surge 3D Game
+//http://localhost:5173/src/main.js
+
+import './style.css';
+
+import * as THREE from 'three';
+import * as CANNON from 'cannon-es';
+import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
+
+// --- Audio Setup ---
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+const audioCtx = new AudioContext();
+
+function playLaserSound() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  // Two oscillators for a complex futuristic tone
+  const osc1 = audioCtx.createOscillator();
+  const osc2 = audioCtx.createOscillator();
+  const gainNode = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+
+  osc1.connect(filter);
+  osc2.connect(filter);
+  filter.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+
+  osc1.type = 'square';
+  osc2.type = 'sawtooth';
+
+  // High pitch dropping rapidly (laser characteristic)
+  osc1.frequency.setValueAtTime(1200, audioCtx.currentTime);
+  osc1.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.15);
+
+  osc2.frequency.setValueAtTime(1250, audioCtx.currentTime);
+  osc2.frequency.exponentialRampToValueAtTime(105, audioCtx.currentTime + 0.15);
+
+  // Filter sweep for that "pew" articulation
+  filter.type = 'bandpass';
+  filter.Q.value = 5;
+  filter.frequency.setValueAtTime(2000, audioCtx.currentTime);
+  filter.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.15);
+
+  // Envelope
+  gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+
+  osc1.start(audioCtx.currentTime);
+  osc2.start(audioCtx.currentTime);
+  osc1.stop(audioCtx.currentTime + 0.15);
+  osc2.stop(audioCtx.currentTime + 0.15);
+}
+
+function playExplosionSound() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  const bufferSize = audioCtx.sampleRate * 1.0; // 1 second duration
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+
+  // Generate white noise
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = Math.random() * 2 - 1;
+  }
+
+  const noiseSource = audioCtx.createBufferSource();
+  noiseSource.buffer = buffer;
+
+  // Add a resonant lowpass filter to give it a "phat" sci-fi boom/thud
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.Q.value = 10; // high resonance for sci-fi sweep
+  filter.frequency.setValueAtTime(800, audioCtx.currentTime);
+  filter.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.8);
+
+  // Sub-bass oscillator for heavy impact feeling
+  const subOsc = audioCtx.createOscillator();
+  subOsc.type = 'sine';
+  subOsc.frequency.setValueAtTime(150, audioCtx.currentTime);
+  subOsc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.8);
+
+  const gainNode = audioCtx.createGain();
+  const subGainNode = audioCtx.createGain();
+
+  noiseSource.connect(filter);
+  filter.connect(gainNode);
+
+  subOsc.connect(subGainNode);
+
+  const masterGain = audioCtx.createGain();
+  gainNode.connect(masterGain);
+  subGainNode.connect(masterGain);
+  masterGain.connect(audioCtx.destination);
+
+  // Noise envelope
+  gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.8);
+
+  // Sub envelope
+  subGainNode.gain.setValueAtTime(1.0, audioCtx.currentTime);
+  subGainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.8);
+
+  // Master volume control to prevent clipping
+  masterGain.gain.value = 0.5;
+
+  noiseSource.start(audioCtx.currentTime);
+  subOsc.start(audioCtx.currentTime);
+  subOsc.stop(audioCtx.currentTime + 1.0);
+}
+
+function playStepSound() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  const osc = audioCtx.createOscillator();
+  const gainNode = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+
+  osc.connect(filter);
+  filter.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+
+  // A short synth tom/kick sound for a futuristic footstep
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.15);
+
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(1000, audioCtx.currentTime);
+  filter.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.15);
+
+  gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+
+  osc.start(audioCtx.currentTime);
+  osc.stop(audioCtx.currentTime + 0.15);
+}
+
+// --- Procedural Background Music ---
+let bgmInterval = null;
+const notes = [220, 261.63, 329.63, 392.00, 440, 392.00, 329.63, 261.63]; // A minor arpeggio
+let currentNoteIndex = 0;
+
+function playBGMNote() {
+  if (audioCtx.state === 'suspended') return;
+
+  const osc = audioCtx.createOscillator();
+  const gainNode = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+
+  osc.connect(filter);
+  filter.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(notes[currentNoteIndex], audioCtx.currentTime);
+
+  // Pluck envelope
+  gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+  gainNode.gain.linearRampToValueAtTime(0.05, audioCtx.currentTime + 0.02);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+
+  // Filter envelope (synthwave squelch)
+  filter.type = 'lowpass';
+  filter.Q.value = 5;
+  filter.frequency.setValueAtTime(2000, audioCtx.currentTime);
+  filter.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.2);
+
+  osc.start(audioCtx.currentTime);
+  osc.stop(audioCtx.currentTime + 0.2);
+
+  currentNoteIndex = (currentNoteIndex + 1) % notes.length;
+}
+
+function startBGM() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (bgmInterval) clearInterval(bgmInterval);
+  currentNoteIndex = 0;
+  // Play a note every 150ms (fast synthwave arpeggio)
+  bgmInterval = setInterval(playBGMNote, 150);
+}
+
+function stopBGM() {
+  if (bgmInterval) {
+    clearInterval(bgmInterval);
+    bgmInterval = null;
+  }
+}
+
+function playLevelUpSound() {
+  if (audioCtx.state === 'suspended') return;
+
+  const notes = [440, 554.37, 659.25, 880]; // A major arpeggio
+  let startTime = audioCtx.currentTime;
+
+  notes.forEach((freq, index) => {
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, startTime + index * 0.1);
+
+    gainNode.gain.setValueAtTime(0, startTime + index * 0.1);
+    gainNode.gain.linearRampToValueAtTime(0.3, startTime + index * 0.1 + 0.05);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + index * 0.1 + 0.3);
+
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    osc.start(startTime + index * 0.1);
+    osc.stop(startTime + index * 0.1 + 0.3);
+  });
+}
+
+// Post-processing imports
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+
+// --- Scene Setup ---
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x050510);
+scene.fog = new THREE.FogExp2(0x050510, 0.02);
+
+// --- Camera Setup ---
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+// --- Renderer Setup ---
+const renderer = new THREE.WebGLRenderer({ antialias: true }); // Removed powerPreference
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.toneMapping = THREE.ReinhardToneMapping;
+document.body.appendChild(renderer.domElement);
+
+// --- Post-Processing (Bloom) ---
+const renderScene = new RenderPass(scene, camera);
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+bloomPass.threshold = 0;
+bloomPass.strength = 1.2; // Neon glow strength
+bloomPass.radius = 0.5;
+
+const outputPass = new OutputPass();
+
+const composer = new EffectComposer(renderer);
+composer.addPass(renderScene);
+composer.addPass(bloomPass);
+composer.addPass(outputPass);
+
+// --- Stylistic Environment (Neon Grid & Lighting) ---
+const ambientLight = new THREE.AmbientLight(0x222244, 1.5);
+scene.add(ambientLight);
+
+const hemiLight = new THREE.HemisphereLight(0xff00ff, 0x00ffff, 0.6);
+hemiLight.position.set(0, 50, 0);
+scene.add(hemiLight);
+
+const floorGeometry = new THREE.PlaneGeometry(200, 200, 100, 100);
+floorGeometry.rotateX(-Math.PI / 2);
+const floorMaterial = new THREE.MeshBasicMaterial({
+  color: 0xff00ff,
+  wireframe: true,
+  transparent: true,
+  opacity: 0.3
+});
+const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+scene.add(floor);
+
+// Obstacles/Enemies
+const obstacleGeometry = new THREE.BoxGeometry(2, 4, 2);
+const obstacleMaterial = new THREE.MeshStandardMaterial({
+  color: 0x000000,
+  emissive: 0x00ffff,
+  emissiveIntensity: 2.0, // High intensity for bloom
+  roughness: 0.1,
+  metalness: 0.8
+});
+
+// We will store meshes and bodies to sync them
+const physicsMeshes = [];
+
+// --- Physics Setup ---
+const world = new CANNON.World({
+  gravity: new CANNON.Vec3(0, -20, 0), // Strong gravity for snappy feel
+});
+
+// Physics materials
+const physicsMaterial = new CANNON.Material('physics');
+const physicsContactMaterial = new CANNON.ContactMaterial(physicsMaterial, physicsMaterial, {
+  friction: 0.0,
+  restitution: 0.0 // No bouncing
+});
+world.addContactMaterial(physicsContactMaterial);
+
+// Ground Physics
+const groundShape = new CANNON.Plane();
+const groundBody = new CANNON.Body({ mass: 0, material: physicsMaterial });
+groundBody.addShape(groundShape);
+groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+world.addBody(groundBody);
+
+let currentLevel = 1;
+let targetsRemaining = 0;
+
+function spawnEnemies(count) {
+  for (let i = 0; i < count; i++) {
+    const x = (Math.random() - 0.5) * 80;
+    const z = (Math.random() - 0.5) * 80;
+    if (Math.abs(x) < 5 && Math.abs(z) < 5) continue;
+
+    const mesh = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+    mesh.position.set(x, 2, z);
+    scene.add(mesh);
+
+    const shape = new CANNON.Box(new CANNON.Vec3(1, 2, 1));
+    const body = new CANNON.Body({ mass: 0, material: physicsMaterial });
+    body.addShape(shape);
+    body.position.set(x, 2, z);
+    world.addBody(body);
+
+    physicsMeshes.push({ mesh, body });
+    targetsRemaining++;
+  }
+}
+
+// Initial Spawn
+spawnEnemies(10);
+
+// --- Player Physics ---
+const playerRadius = 1;
+const playerShape = new CANNON.Sphere(playerRadius);
+const playerBody = new CANNON.Body({ mass: 5, material: physicsMaterial });
+playerBody.addShape(playerShape);
+playerBody.position.set(0, 5, 0); // Start slightly in the air
+playerBody.linearDamping = 0.9;
+world.addBody(playerBody);
+
+// --- Controls ---
+const controls = new PointerLockControls(camera, document.body);
+const instructions = document.getElementById('instructions');
+
+instructions.addEventListener('click', () => {
+  controls.lock();
+});
+
+controls.addEventListener('lock', () => {
+  if (!isGameOver) {
+    instructions.style.display = 'none';
+    if (!bgmInterval) startBGM();
+  }
+});
+
+controls.addEventListener('unlock', () => {
+  if (!isGameOver) {
+    instructions.style.display = 'block';
+  }
+  stopBGM();
+});
+scene.add(camera);
+
+// --- Input State Handling ---
+const keys = { KeyW: false, KeyA: false, KeyS: false, KeyD: false, Space: false };
+document.addEventListener('keydown', (e) => {
+  if (keys.hasOwnProperty(e.code)) keys[e.code] = true;
+});
+document.addEventListener('keyup', (e) => {
+  if (keys.hasOwnProperty(e.code)) {
+    keys[e.code] = false;
+  }
+});
+
+// Jump mechanic
+let canJump = false;
+world.addEventListener('postStep', () => {
+  const contacts = world.contacts;
+  canJump = false;
+  for (let i = 0; i < contacts.length; i++) {
+    const contact = contacts[i];
+    if (contact.bi === playerBody || contact.bj === playerBody) {
+      if (contact.ni.y > 0.5 || contact.ni.y < -0.5) {
+        canJump = true;
+      }
+    }
+  }
+});
+
+const jumpVelocity = 10;
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && canJump && controls.isLocked) {
+    playerBody.velocity.y = jumpVelocity;
+  }
+});
+
+// --- Game State & UI ---
+let score = 0;
+let totalShots = 0;
+let totalHits = 0;
+let isGameOver = false;
+let stageStartTime = Date.now();
+let elapsedTime = 0;
+
+const scoreElement = document.getElementById('score');
+const missesElement = document.getElementById('misses');
+const accuracyElement = document.getElementById('accuracy');
+const levelElement = document.getElementById('level');
+const timerElement = document.getElementById('timer');
+
+const gameOverScreen = document.getElementById('game-over');
+const finalStatsElement = document.getElementById('final-stats');
+const playerNameInput = document.getElementById('player-name');
+const saveScoreBtn = document.getElementById('save-score-btn');
+const replayBtn = document.getElementById('replay-btn');
+const leaderboardList = document.getElementById('leaderboard-list');
+
+const radarCanvas = document.getElementById('radar');
+const radarCtx = radarCanvas ? radarCanvas.getContext('2d') : null;
+
+function updateScoreboard() {
+  if (levelElement) levelElement.innerText = `STAGE: ${currentLevel}`;
+  if (scoreElement) scoreElement.innerText = `SCORE: ${score}`;
+  if (missesElement) missesElement.innerText = `MISSES: ${totalShots - totalHits}/10`;
+  if (accuracyElement) {
+    const acc = totalShots === 0 ? 100 : Math.round((totalHits / totalShots) * 100);
+    accuracyElement.innerText = `ACCURACY: ${acc}%`;
+  }
+}
+
+function advanceLevel() {
+  currentLevel++;
+  playerBody.position.set(0, 5, 0);
+  playerBody.velocity.set(0, 0, 0);
+  stageStartTime = Date.now();
+  spawnEnemies(10 + (currentLevel * 5));
+  updateScoreboard();
+  playLevelUpSound();
+}
+
+function triggerGameOver(reason = "GAME OVER") {
+  isGameOver = true;
+  stopBGM();
+  controls.unlock();
+
+  const crosshair = document.getElementById('crosshair');
+  if (crosshair) {
+    crosshair.style.borderColor = '#f00';
+    crosshair.style.boxShadow = '0 0 10px #f00, inset 0 0 10px #f00';
+  }
+
+  if (gameOverScreen) {
+    gameOverScreen.style.display = 'flex';
+    const h1 = gameOverScreen.querySelector('h1');
+    if (h1) {
+      h1.innerText = reason;
+      h1.style.color = reason === "TIME UP!" ? '#f00' : '#f0f';
+      h1.style.textShadow = reason === "TIME UP!" ? '0 0 20px #f00' : '0 0 20px #f0f';
+    }
+  }
+
+  if (finalStatsElement) {
+    const acc = totalShots === 0 ? 100 : Math.round((totalHits / totalShots) * 100);
+    finalStatsElement.innerHTML = `
+      STAGE REACHED: ${currentLevel}<br/>
+      FINAL SCORE: ${score}<br/>
+      ACCURACY: ${acc}%<br/>
+      TIME SURVIVED: ${elapsedTime.toFixed(1)}s
+    `;
+  }
+  updateLeaderboardUI();
+}
+
+// Leaderboard Logic
+function getLeaderboard() {
+  try { return JSON.parse(localStorage.getItem('zenith_leaderboard')) || []; }
+  catch (e) { return []; }
+}
+
+function updateLeaderboardUI() {
+  const lb = getLeaderboard();
+  if (leaderboardList) {
+    leaderboardList.innerHTML = lb.map(entry => `<li><span>${entry.name}</span><span>${entry.score} pts (Stage ${entry.stage})</span></li>`).join('');
+  }
+}
+
+if (saveScoreBtn) {
+  saveScoreBtn.addEventListener('click', () => {
+    const name = playerNameInput.value.trim().toUpperCase() || 'ANONYMOUS';
+    const lb = getLeaderboard();
+    lb.push({ name, score, stage: currentLevel, time: elapsedTime.toFixed(1) });
+    lb.sort((a, b) => b.score - a.score);
+    lb.splice(5);
+    localStorage.setItem('zenith_leaderboard', JSON.stringify(lb));
+
+    updateLeaderboardUI();
+    document.getElementById('name-input-container').style.display = 'none';
+    replayBtn.style.display = 'block';
+  });
+}
+
+if (replayBtn) {
+  replayBtn.addEventListener('click', () => {
+    isGameOver = false;
+    score = 0;
+    totalShots = 0;
+    totalHits = 0;
+    currentLevel = 1;
+    stageStartTime = Date.now();
+    targetsRemaining = 0;
+
+    for (let i = 0; i < physicsMeshes.length; i++) {
+      scene.remove(physicsMeshes[i].mesh);
+      world.removeBody(physicsMeshes[i].body);
+    }
+    physicsMeshes.length = 0;
+
+    spawnEnemies(10);
+    updateScoreboard();
+
+    playerBody.position.set(0, 5, 0);
+    playerBody.velocity.set(0, 0, 0);
+
+    const crosshair = document.getElementById('crosshair');
+    if (crosshair) {
+      crosshair.style.borderColor = '#0ff';
+      crosshair.style.boxShadow = '0 0 10px #0ff, inset 0 0 10px #0ff';
+    }
+
+    if (gameOverScreen) gameOverScreen.style.display = 'none';
+    document.getElementById('name-input-container').style.display = 'flex';
+    if (saveScoreBtn) saveScoreBtn.style.display = 'block';
+    if (replayBtn) replayBtn.style.display = 'none';
+    if (playerNameInput) playerNameInput.value = '';
+
+    controls.lock();
+    startBGM();
+  });
+}
+
+const raycaster = new THREE.Raycaster();
+const clickStart = new THREE.Vector2(0, 0); // Screen center for locked pointer
+
+// --- Visual Effects ---
+const particles = [];
+const laserBeams = [];
+const particleGeometry = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+const particleMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+const laserMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.8 });
+
+function spawnExplosion(position) {
+  for (let i = 0; i < 20; i++) {
+    const mesh = new THREE.Mesh(particleGeometry, particleMaterial);
+    mesh.position.copy(position);
+    scene.add(mesh);
+
+    const velocity = new THREE.Vector3(
+      (Math.random() - 0.5) * 40,
+      (Math.random() - 0.5) * 40,
+      (Math.random() - 0.5) * 40
+    );
+
+    particles.push({
+      mesh,
+      velocity,
+      lifespan: 0.5 + Math.random() * 0.5
+    });
+  }
+}
+
+function spawnLaserBeam(start, end) {
+  const distance = start.distanceTo(end);
+  const geometry = new THREE.CylinderGeometry(0.05, 0.05, distance, 8);
+  geometry.rotateX(Math.PI / 2);
+
+  const mesh = new THREE.Mesh(geometry, laserMaterial);
+  mesh.position.copy(start).lerp(end, 0.5);
+  mesh.lookAt(end);
+
+  scene.add(mesh);
+
+  laserBeams.push({
+    mesh,
+    lifespan: 0.1
+  });
+}
+
+function updateVisualEffects(delta) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.lifespan -= delta;
+    if (p.lifespan <= 0) {
+      scene.remove(p.mesh);
+      particles.splice(i, 1);
+    } else {
+      p.mesh.position.addScaledVector(p.velocity, delta);
+      p.mesh.scale.setScalar(p.lifespan * 2);
+    }
+  }
+
+  for (let i = laserBeams.length - 1; i >= 0; i--) {
+    const l = laserBeams[i];
+    l.lifespan -= delta;
+    if (l.lifespan <= 0) {
+      scene.remove(l.mesh);
+      laserBeams.splice(i, 1);
+    }
+  }
+}
+
+document.addEventListener('mousedown', (e) => {
+  if (!controls.isLocked) return;
+  // Left click
+  if (e.button === 0) {
+    playLaserSound();
+    totalShots++;
+
+    raycaster.setFromCamera(clickStart, camera);
+    const intersects = raycaster.intersectObjects(scene.children);
+    let hitObject = false;
+
+    let endPoint = new THREE.Vector3();
+    endPoint.copy(raycaster.ray.direction).multiplyScalar(100).add(raycaster.ray.origin);
+
+    for (let i = 0; i < intersects.length; i++) {
+      const obj = intersects[i].object;
+      if (obj.geometry === obstacleGeometry) {
+        hitObject = true;
+        totalHits++;
+        endPoint.copy(intersects[i].point);
+
+        // Simple visual feedback: Flash white then remove
+        const prevC = obj.material.emissive.getHex();
+        obj.material = obj.material.clone();
+        obj.material.emissive.setHex(0xffffff);
+
+        setTimeout(() => {
+          playExplosionSound();
+          scene.remove(obj);
+          spawnExplosion(obj.position);
+
+          score += 100;
+          const physicsObjIndex = physicsMeshes.findIndex(p => p.mesh === obj);
+          if (physicsObjIndex > -1) {
+            world.removeBody(physicsMeshes[physicsObjIndex].body);
+            physicsMeshes.splice(physicsObjIndex, 1);
+            targetsRemaining--;
+          }
+
+          if (targetsRemaining <= 0) {
+            advanceLevel();
+          }
+        }, 50); // Small delay to see the flash
+
+        break; // Only shoot the first obstacle hit
+      }
+    }
+
+    const startPoint = new THREE.Vector3(0.5, -0.5, -1).applyQuaternion(camera.quaternion).add(camera.position);
+    spawnLaserBeam(startPoint, endPoint);
+
+    updateScoreboard();
+
+    if (totalShots - totalHits >= 10) {
+      triggerGameOver("TOO MANY MISSES");
+    }
+  }
+});
+
+function updateRadar() {
+  if (!radarCtx) return;
+  const w = radarCanvas.width;
+  const h = radarCanvas.height;
+  const centerX = w / 2;
+  const centerY = h / 2;
+  const radarRadius = w / 2;
+
+  radarCtx.clearRect(0, 0, w, h);
+
+  radarCtx.save();
+  radarCtx.beginPath();
+  radarCtx.arc(centerX, centerY, radarRadius, 0, Math.PI * 2);
+  radarCtx.clip();
+
+  // Grid
+  radarCtx.strokeStyle = 'rgba(0, 255, 255, 0.2)';
+  radarCtx.beginPath();
+  radarCtx.moveTo(centerX, 0);
+  radarCtx.lineTo(centerX, h);
+  radarCtx.moveTo(0, centerY);
+  radarCtx.lineTo(w, centerY);
+  radarCtx.stroke();
+
+  // Enemies
+  const mapScale = radarRadius / 80;
+  radarCtx.fillStyle = '#0ff';
+  for (let i = 0; i < physicsMeshes.length; i++) {
+    const dx = physicsMeshes[i].mesh.position.x - playerBody.position.x;
+    const dz = physicsMeshes[i].mesh.position.z - playerBody.position.z;
+    const mapX = centerX + dx * mapScale;
+    const mapY = centerY + dz * mapScale;
+
+    radarCtx.beginPath();
+    radarCtx.arc(mapX, mapY, 3, 0, Math.PI * 2);
+    radarCtx.fill();
+  }
+
+  // compass/player pointing according to camera yaw rotation
+  radarCtx.translate(centerX, centerY);
+  radarCtx.rotate(-camera.rotation.y);
+  radarCtx.fillStyle = '#f0f';
+  radarCtx.beginPath();
+  radarCtx.moveTo(0, -8);
+  radarCtx.lineTo(-6, 6);
+  radarCtx.lineTo(6, 6);
+  radarCtx.fill();
+
+  radarCtx.restore();
+}
+
+
+// --- Movement Logic ---
+const movementSpeed = 300;
+const inputVelocity = new THREE.Vector3();
+const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+function updatePlayerMovement() {
+  inputVelocity.set(0, 0, 0);
+
+  if (keys.KeyW) inputVelocity.z -= 1;
+  if (keys.KeyS) inputVelocity.z += 1;
+  if (keys.KeyA) inputVelocity.x -= 1;
+  if (keys.KeyD) inputVelocity.x += 1;
+
+  inputVelocity.normalize();
+
+  euler.y = camera.rotation.y;
+  inputVelocity.applyEuler(euler);
+
+  if (inputVelocity.length() > 0) {
+    playerBody.applyForce(new CANNON.Vec3(
+      inputVelocity.x * movementSpeed,
+      0,
+      inputVelocity.z * movementSpeed
+    ), playerBody.position);
+  }
+}
+
+// --- Resize Handler ---
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// --- Animation Loop ---
+let stepTimer = 0;
+const STEP_INTERVAL = 0.35; // seconds between steps
+
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+
+  const delta = clock.getDelta();
+  world.step(1 / 60, delta, 3);
+  camera.position.copy(playerBody.position);
+  camera.position.y += playerRadius * 0.5;
+
+  if (controls.isLocked && !isGameOver) {
+    updatePlayerMovement();
+
+    elapsedTime = (Date.now() - stageStartTime) / 1000;
+    if (timerElement) {
+      timerElement.innerText = `TIME: ${elapsedTime.toFixed(1)}s`;
+      timerElement.style.color = elapsedTime > 35 ? '#f00' : '#0ff'; // Turn red when < 10s left
+      timerElement.style.textShadow = elapsedTime > 35 ? '0 0 10px #f00, 0 0 20px #f00' : '0 0 10px #0ff, 0 0 20px #0ff';
+    }
+
+    if (elapsedTime >= 45.0) {
+      triggerGameOver("TIME UP!");
+    } else {
+      updateRadar();
+      updateVisualEffects(delta);
+
+      // Movement sound logic
+      const hzSpeed = Math.sqrt(playerBody.velocity.x ** 2 + playerBody.velocity.z ** 2);
+      if (canJump && hzSpeed > 2.0) { // On ground and moving fast enough
+        stepTimer += delta;
+        if (stepTimer >= STEP_INTERVAL) {
+          playStepSound();
+          stepTimer = 0;
+        }
+      } else {
+        // Ready to play step immediately when starting to move
+        stepTimer = STEP_INTERVAL;
+      }
+    }
+  }
+
+  composer.render();
+}
+
+animate();
