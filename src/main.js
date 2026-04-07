@@ -56,7 +56,7 @@ let hudCanvas, hudCtx, shakeAmount = 0, chromAbTarget = 0.0015;
 let energyCore, weaponSideFins = [], weaponEngines = [], shieldMesh = null; // V80 SHIELD MESH
 let spaceDust, isLevelAdvancing = false, globalFireTimer = 3.5; // V80 WAVE TIMING
 let engineHumOsc, engineHumGain, navArrow, controlStick, targetingLine;
-let lastHitTime = 0; // V74 GLOBAL COOLDOWN
+let lastHitTime = 0, bossFireTimer = 2.0; // V96.0 BOSS AI COOLDOWN
 
 // --- UI Elements ---
 let instructions, startButton, replayBtn, saveScoreBtn, playerNameInput, leaderboardList;
@@ -680,8 +680,29 @@ function animate() {
 
     if (bossActive && bossMesh) {
         bossMesh.rotation.y += delta * 0.4;
-        if (bossMesh.position.z < -600) bossMesh.position.z += delta * 120; // 4X FASTER APPROACH V95.5
-        else bossMesh.position.z = -600 + Math.sin(Date.now()*0.001) * 80;
+        // 1. DYNAMIC APPROACH V96.0
+        if (bossMesh.position.z < -600) bossMesh.position.z += delta * 120;
+        else {
+           // 2. ACTIVE MANEUVERING
+           bossMesh.position.z = -600 + Math.sin(Date.now()*0.001) * 80;
+           bossMesh.position.x = Math.sin(Date.now()*0.0005) * 250; // WIDE STRAFE
+        }
+
+        // 3. CIRCULAR HELLFIRE AI
+        bossFireTimer -= delta;
+        if (bossFireTimer <= 0) {
+           for (let i = 0; i < 8; i++) {
+               const angle = (i / 8) * Math.PI * 2;
+               const b = new THREE.Mesh(new THREE.SphereGeometry(6), new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 5 }));
+               b.position.copy(bossMesh.position);
+               b.position.x += Math.cos(angle) * 120; b.position.z += Math.sin(angle) * 120;
+               scene.add(b);
+               const dir = new THREE.Vector3().subVectors(playerBody.position, b.position).normalize();
+               enemyBullets.push({ mesh: b, velocity: dir.multiplyScalar(150), lifespan: 8.0 });
+           }
+           bossFireTimer = 2.5 + Math.random() * 2;
+           playArcadeSFX('explosion', 0.2); // BOSS FIRE SOUND
+        }
     }
 
     if (bombCharge < 100) {
@@ -1122,7 +1143,7 @@ function spawnMothership() {
     centerCore.position.set(0, 20, 0); g.add(centerCore);
 
     // V84/V94.7 CHIBI-SCALE REMOTE POSITIONING
-    g.position.set(0, 150, -1000); // BROUGHT CLOSER FOR MOBILE FRUSTUM V95.5
+    g.position.set(0, 50, -1000); // LOWERED FOR IPAD VISIBILITY V96.0
     const bScale = isTouch ? 2.1 : 3.0; // V94.7 MOBILE BOSS SCALE (30% REDUCTION)
     g.scale.setScalar(bScale); scene.add(g);
     const pBody = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(450, 40, 450)) }); // KINEMATIC V84
@@ -1256,4 +1277,4 @@ window.handleContinue = () => {
 window.handleExit = () => {
     location.reload();
 };
-console.log("🚀 BOOT: V95.5 ONLINE - DREADNOUGHT VISIBILITY FIXED");
+console.log("🚀 BOOT: V96.0 ONLINE - DREADNOUGHT AWAKENING AI");
