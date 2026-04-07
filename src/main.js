@@ -861,6 +861,9 @@ window.addEventListener('touchend', e => {
         if (e.changedTouches[i].identifier === moveTouchId) moveTouchId = null;
     }
 });
+// GLOBAL COCKPIT LOCK V95.4
+document.addEventListener('touchmove', e => { if (e.touches.length > 1 || e.scale !== 1) e.preventDefault(); }, { passive: false });
+document.addEventListener('touchstart', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 
 function startGame() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1253,4 +1256,4 @@ window.handleContinue = () => {
 window.handleExit = () => {
     location.reload();
 };
-console.log("🚀 BOOT: V95.3 ONLINE - SUB-ATOMIC BASS SYNTHESIS");
+console.log("🚀 BOOT: V95.4 ONLINE - MOBILE-LOCK COCKPIT");
