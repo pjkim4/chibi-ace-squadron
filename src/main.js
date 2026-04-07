@@ -793,32 +793,36 @@ window.addEventListener('keyup', (e) => {
 });
 window.addEventListener('mousedown', e => { if (gameStarted && !isGameOver) fireLaser(); });
 
-// --- MOBILE ELITE CONTROLS (RELATIVE DRAG) V69 ---
-let touchActive = false, lastTouchX = 0, lastTouchY = 0;
+// --- MOBILE ELITE CONTROLS (MULTI-TOUCH) V95.0 ---
+let lastTouchX = 0, lastTouchY = 0, moveTouchId = null;
 window.addEventListener('touchstart', e => {
-  if (!gameStarted || isGameOver) return;
-  touchActive = true;
-  lastTouchX = e.touches[0].clientX;
-  lastTouchY = e.touches[0].clientY;
-  // FIRE ON TAP IF NOT MOVING MUCH
+  if (!gameStarted || isGameOver || moveTouchId !== null) return;
+  const t = e.changedTouches[0];
+  moveTouchId = t.identifier;
+  lastTouchX = t.clientX; lastTouchY = t.clientY;
 }, { passive: false });
 
 window.addEventListener('touchmove', e => {
-  if (!touchActive || !playerBody) return;
+  if (moveTouchId === null || !playerBody) return;
   e.preventDefault();
-  const touchX = e.touches[0].clientX;
-  const touchY = e.touches[0].clientY;
-  const dx = touchX - lastTouchX;
-  const dy = touchY - lastTouchY;
-  
+  let t = null;
+  for (let i=0; i<e.touches.length; i++) {
+    if (e.touches[i].identifier === moveTouchId) { t = e.touches[i]; break; }
+  }
+  if (!t) return;
+
+  const dx = t.clientX - lastTouchX;
+  const dy = t.clientY - lastTouchY;
   playerBody.position.x += dx * 0.5;
   playerBody.position.z += dy * 0.5;
-  
-  lastTouchX = touchX;
-  lastTouchY = touchY;
+  lastTouchX = t.clientX; lastTouchY = t.clientY;
 }, { passive: false });
 
-window.addEventListener('touchend', () => { touchActive = false; });
+window.addEventListener('touchend', e => {
+    for (let i=0; i<e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === moveTouchId) moveTouchId = null;
+    }
+});
 
 function startGame() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1211,4 +1215,4 @@ window.handleContinue = () => {
 window.handleExit = () => {
     location.reload();
 };
-console.log("🚀 BOOT: V94.8 ONLINE - RADAR BLACKOUT REPAIR");
+console.log("🚀 BOOT: V95.0 ONLINE - MULTI-TOUCH TACTICAL");
