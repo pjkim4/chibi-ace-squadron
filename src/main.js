@@ -150,11 +150,49 @@ function playArcadeSFX(type, vol = 0.1) {
       gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
       osc.connect(gain);
       break;
+    case 'ion_detonation': // V95.1 FUTURISTIC MULTI-LAYER DETONATION
+      const ionGain = audioCtx.createGain();
+      const warp = audioCtx.createOscillator();
+      const thud = audioCtx.createOscillator();
+      
+      // LAYER 1: THE WARP (CHARGE-UP)
+      warp.type = 'sine';
+      warp.frequency.setValueAtTime(500, audioCtx.currentTime);
+      warp.frequency.exponentialRampToValueAtTime(1500, audioCtx.currentTime + 0.2);
+      
+      // LAYER 2: THE THUD (IMPACT)
+      thud.type = 'square';
+      thud.frequency.setValueAtTime(100, audioCtx.currentTime + 0.1);
+      thud.frequency.exponentialRampToValueAtTime(20, audioCtx.currentTime + 0.8);
+      
+      ionGain.gain.setValueAtTime(0.5 * vol, audioCtx.currentTime);
+      ionGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+      
+      warp.connect(ionGain); thud.connect(ionGain);
+      ionGain.connect(audioCtx.destination);
+      
+      warp.start(); warp.stop(audioCtx.currentTime + 0.25);
+      thud.start(audioCtx.currentTime + 0.1); thud.stop(audioCtx.currentTime + 1.2);
+      
+      // LAYER 3: THE RUMBLE (LF NOISE)
+      const noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 1.5, audioCtx.sampleRate);
+      const noiseData = noiseBuf.getChannelData(0);
+      for (let i = 0; i < noiseBuf.length; i++) noiseData[i] = Math.random() * 2 - 1;
+      const noiseSrc = audioCtx.createBufferSource(); noiseSrc.buffer = noiseBuf;
+      const noiseFilter = audioCtx.createBiquadFilter();
+      noiseFilter.type = 'lowpass'; noiseFilter.frequency.setValueAtTime(400, audioCtx.currentTime + 0.1);
+      noiseFilter.frequency.exponentialRampToValueAtTime(20, audioCtx.currentTime + 1.0);
+      const noiseGain = audioCtx.createGain();
+      noiseGain.gain.setValueAtTime(vol, audioCtx.currentTime + 0.1);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+      noiseSrc.connect(noiseFilter); noiseFilter.connect(noiseGain); noiseGain.connect(audioCtx.destination);
+      noiseSrc.start(audioCtx.currentTime + 0.1);
+      break;
   }
-  if (type !== 'explosion') {
+  if (type !== 'explosion' && type !== 'ion_detonation') {
     gain.connect(audioCtx.destination);
     osc.start(); osc.stop(audioCtx.currentTime + 0.5);
-  } else {
+  } else if (type === 'explosion') {
     gain.connect(audioCtx.destination);
   }
 }
@@ -1188,7 +1226,7 @@ function detonateBomb() {
   });
 
   explosionTimer = 0.2; shakeAmount = 25; // MASSIVE IMPACT
-  playExplosionSound();
+  playArcadeSFX('ion_detonation', 0.5);
 }
 
 try {
@@ -1215,4 +1253,4 @@ window.handleContinue = () => {
 window.handleExit = () => {
     location.reload();
 };
-console.log("🚀 BOOT: V95.0 ONLINE - MULTI-TOUCH TACTICAL");
+console.log("🚀 BOOT: V95.3 ONLINE - SUB-ATOMIC BASS SYNTHESIS");
