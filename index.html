@@ -324,8 +324,8 @@
     
     <!-- MOBILE TACTICAL ACTIONS V69 -->
     <div id="mobile-controls">
-        <div id="fire-btn" class="touch-btn" onmousedown="fireLaser()" ontouchstart="fireLaser()">FIRE</div>
-        <div id="bomb-btn" class="touch-btn" onmousedown="detonateBomb()" ontouchstart="detonateBomb()">BOMB</div>
+        <div id="fire-btn" class="touch-btn" onmousedown="event.stopPropagation(); event.preventDefault(); fireLaser()" ontouchstart="event.stopPropagation(); event.preventDefault(); fireLaser()">FIRE</div>
+        <div id="bomb-btn" class="touch-btn" onmousedown="event.stopPropagation(); event.preventDefault(); detonateBomb()" ontouchstart="event.stopPropagation(); event.preventDefault(); detonateBomb()">BOMB</div>
     </div>
 
     <div id="game-over" style="display: none; z-index: 1000; pointer-events: auto;" class="glass">
@@ -334,8 +334,8 @@
       
       <!-- MOBILE DECISION INTERFACE V71 -->
       <div id="mobile-decision-ui" style="display: none; flex-direction: column; width: 100%; margin-top: 10px;">
-          <button class="decision-btn" onmousedown="handleContinue()" ontouchstart="handleContinue()">CONTINUE [C]</button>
-          <button class="decision-btn magenta" onmousedown="handleExit()" ontouchstart="handleExit()">RETIRE [E]</button>
+          <button class="decision-btn" onmousedown="event.stopPropagation(); event.preventDefault(); handleContinue()" ontouchstart="event.stopPropagation(); event.preventDefault(); handleContinue()">CONTINUE [C]</button>
+          <button class="decision-btn magenta" onmousedown="event.stopPropagation(); event.preventDefault(); handleExit()" ontouchstart="event.stopPropagation(); event.preventDefault(); handleExit()">RETIRE [E]</button>
       </div>
       <div id="desktop-decision-hint" style="font-size: 14px; opacity: 0.7; margin: 10px 0;">PRESS [C] to CONTINUE | [E] to EXIT</div>
 

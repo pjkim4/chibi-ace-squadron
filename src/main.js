@@ -852,36 +852,42 @@ window.addEventListener('keyup', (e) => {
 });
 window.addEventListener('mousedown', e => { if (gameStarted && !isGameOver) fireLaser(); });
 
-// --- MOBILE ELITE CONTROLS (MULTI-TOUCH) V95.0 ---
-let lastTouchX = 0, lastTouchY = 0, moveTouchId = null;
-window.addEventListener('touchstart', e => {
-  if (!gameStarted || isGameOver || moveTouchId !== null) return;
-  const t = e.changedTouches[0];
-  moveTouchId = t.identifier;
-  lastTouchX = t.clientX; lastTouchY = t.clientY;
-}, { passive: false });
-
-window.addEventListener('touchmove', e => {
-  if (moveTouchId === null || !playerBody) return;
-  e.preventDefault();
-  let t = null;
-  for (let i=0; i<e.touches.length; i++) {
-    if (e.touches[i].identifier === moveTouchId) { t = e.touches[i]; break; }
+// --- MOBILE ELITE CONTROLS (POINTER EVENTS) V96.3 ---
+let lastTouchX = 0, lastTouchY = 0, movePointerId = null;
+window.addEventListener('pointerdown', e => {
+  if (!gameStarted || isGameOver || e.pointerType === 'mouse') return;
+  // ATOMIC LOCK V96.3: Use setPointerCapture to stay sticky on maneuvers
+  if (movePointerId === null) {
+    movePointerId = e.pointerId;
+    lastTouchX = e.clientX; lastTouchY = e.clientY;
+    try { e.target.setPointerCapture(e.pointerId); } catch(err) {} 
   }
-  if (!t) return;
-
-  const dx = t.clientX - lastTouchX;
-  const dy = t.clientY - lastTouchY;
-  playerBody.position.x += dx * 0.5;
-  playerBody.position.z += dy * 0.5;
-  lastTouchX = t.clientX; lastTouchY = t.clientY;
 }, { passive: false });
 
-window.addEventListener('touchend', e => {
-    for (let i=0; i<e.changedTouches.length; i++) {
-        if (e.changedTouches[i].identifier === moveTouchId) moveTouchId = null;
+window.addEventListener('pointermove', e => {
+  if (movePointerId !== e.pointerId || !playerBody) return;
+  e.preventDefault();
+  
+  const dx = e.clientX - lastTouchX;
+  const dy = e.clientY - lastTouchY;
+  
+  // NaN SHIELDING V96.3
+  if (Number.isFinite(dx) && Number.isFinite(dy)) {
+    playerBody.position.x += dx * 0.45;
+    playerBody.position.z += dy * 0.45;
+    lastTouchX = e.clientX; lastTouchY = e.clientY;
+  }
+}, { passive: false });
+
+const releasePointer = e => {
+    if (e.pointerId === movePointerId) {
+        try { e.target.releasePointerCapture(e.pointerId); } catch(err) {}
+        movePointerId = null;
     }
-});
+};
+window.addEventListener('pointerup', releasePointer);
+window.addEventListener('pointercancel', releasePointer);
+window.addEventListener('pointerout', releasePointer);
 // GLOBAL COCKPIT LOCK V95.4
 document.addEventListener('touchmove', e => { if (e.touches.length > 1 || e.scale !== 1) e.preventDefault(); }, { passive: false });
 document.addEventListener('touchstart', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
@@ -1277,4 +1283,4 @@ window.handleContinue = () => {
 window.handleExit = () => {
     location.reload();
 };
-console.log("🚀 BOOT: V96.2 ONLINE - ABSOLUTE INPUT INTEGRITY");
+console.log("🚀 BOOT: V96.3 ONLINE - TACTICAL SHIELDING LOCK");
