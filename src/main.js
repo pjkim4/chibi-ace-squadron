@@ -1277,4 +1277,4 @@ window.handleContinue = () => {
 window.handleExit = () => {
     location.reload();
 };
-console.log("🚀 BOOT: V96.0 ONLINE - DREADNOUGHT AWAKENING AI");
+console.log("🚀 BOOT: V96.1 ONLINE - TACTICAL TOUCH RESET");
