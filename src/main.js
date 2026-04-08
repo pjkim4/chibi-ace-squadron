@@ -61,7 +61,7 @@ let lastHitTime = 0, bossFireTimer = 2.0; // V96.0 BOSS AI COOLDOWN
 // --- UI Elements ---
 let instructions, startButton, replayBtn, saveScoreBtn, playerNameInput, leaderboardList;
 let radarCanvas, radarCtx, bonusNotificationElement;
-let chibiTex, droneTex, forestTex, fireBullTex; // V68/V97.0 TEXTURES
+let chibiTex, droneTex, forestTex, fireBullTex, adBannerTex; // V97.2 TEXTURES
 
 // --- Shaders ---
 const ChromaticAberrationShader = {
@@ -255,6 +255,7 @@ function initEngine() {
     droneTex = texLoader.load('drone_skin.png');
     forestTex = texLoader.load('forest_ground.png');
     fireBullTex = texLoader.load('fire_bull.png'); // V97.0 GOURMET ASSET
+    adBannerTex = texLoader.load('fire_bull_banner.png'); // V97.2 ADVERTISING
     forestTex.wrapS = forestTex.wrapT = THREE.RepeatWrapping;
     forestTex.repeat.set(10, 10);
     
@@ -493,8 +494,37 @@ function renderEnvironment() {
   playerShadow.position.y = -49.5;
   scene.add(playerShadow);
 
-  playerShadow.position.y = -49.5;
-  scene.add(playerShadow);
+  // V97.2 GOURMET BILLBOARD SYSTEM
+  for (let i = 0; i < 6; i++) {
+     spawnBillboard(-500 - (i * 1500));
+  }
+}
+
+function spawnBillboard(z) {
+    const group = new THREE.Group();
+    const frameGeo = new THREE.BoxGeometry(100, 60, 5);
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9 });
+    const frame = new THREE.Mesh(frameGeo, frameMat);
+    group.add(frame);
+
+    const bannerGeo = new THREE.PlaneGeometry(90, 50);
+    const bannerMat = new THREE.MeshStandardMaterial({ 
+        map: adBannerTex, emissive: 0xffffff, emissiveIntensity: 1.2, transparent: true 
+    });
+    const banner = new THREE.Mesh(bannerGeo, bannerMat);
+    banner.position.z = 2.6; group.add(banner);
+
+    const pole = new THREE.Mesh(new THREE.BoxGeometry(10, 150, 10), frameMat);
+    pole.position.y = -75; group.add(pole);
+
+    const light = new THREE.PointLight(0x00ffff, 500, 200);
+    light.position.set(0, 40, 20); group.add(light);
+
+    group.position.set(Math.random() > 0.5 ? 250 : -250, 50, z);
+    scene.add(group);
+    
+    // Track for movement logic
+    physicsMeshes.push({ mesh: group, body: { position: group.position, quaternion: group.quaternion }, type: 'billboard' });
 }
 
 let bossActive = false, bossMesh = null, bossHealth = 100;
@@ -635,6 +665,10 @@ function animate() {
               p.fireTimer = ( (isTouch ? 4 : 3) + Math.random() * 4) / Math.max(1, currentLevel * 0.15); 
               playSound(350, 'square', 0.15, 0.05);
           }
+       }
+       if (p.type === 'billboard') {
+           p.mesh.position.z += delta * 120; // MOVE WITH TERRAIN V97.2
+           if (p.mesh.position.z > 300) p.mesh.position.z = -6000;
        }
        p.mesh.position.copy(p.body.position); p.mesh.quaternion.copy(p.body.quaternion);
        
@@ -1309,4 +1343,4 @@ window.handleContinue = () => {
 window.handleExit = () => {
     location.reload();
 };
-console.log("🚀 BOOT: V97.1 ONLINE - NANOSYNTH OPTIMIZATION");
+console.log("🚀 BOOT: V97.2 ONLINE - GOURMET MARKETING SECTOR");
