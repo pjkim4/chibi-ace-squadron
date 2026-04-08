@@ -61,7 +61,7 @@ let lastHitTime = 0, bossFireTimer = 2.0; // V96.0 BOSS AI COOLDOWN
 // --- UI Elements ---
 let instructions, startButton, replayBtn, saveScoreBtn, playerNameInput, leaderboardList;
 let radarCanvas, radarCtx, bonusNotificationElement;
-let chibiTex, droneTex, forestTex; // V68 TEXTURES
+let chibiTex, droneTex, forestTex, fireBullTex; // V68/V97.0 TEXTURES
 
 // --- Shaders ---
 const ChromaticAberrationShader = {
@@ -254,6 +254,7 @@ function initEngine() {
     chibiTex = texLoader.load('chibi_skin.png');
     droneTex = texLoader.load('drone_skin.png');
     forestTex = texLoader.load('forest_ground.png');
+    fireBullTex = texLoader.load('fire_bull.png'); // V97.0 GOURMET ASSET
     forestTex.wrapS = forestTex.wrapT = THREE.RepeatWrapping;
     forestTex.repeat.set(10, 10);
     
@@ -516,54 +517,57 @@ function tickSpawner(delta) {
 function spawnEnemies(count) {
   for (let i = 0; i < count; i++) {
     const typeRoll = Math.random();
-    let hullCol = 0x888888, lightCol = 0x00ffff, hp = 1, scale = 2.5;
+    let hullCol = 0xff0000, lightCol = 0xffaa00, hp = 1, scale = 2.5;
 
-    if (typeRoll < 0.4) { // CYAN STRIKER
-       hullCol = 0x444444; lightCol = 0x00ffff; hp = 1; scale = 1.8;
-    } else if (typeRoll < 0.8) { // MAGENTA TANK
-       hullCol = 0x664466; lightCol = 0xff00ff; hp = 5; scale = 3.5;
-    } else { // LIME SCOUT
-       hullCol = 0x446644; lightCol = 0x00ff00; hp = 2; scale = 2.2;
+    if (typeRoll < 0.4) { // MILD FIRE BULL (SCARLET)
+       hullCol = 0xaa0000; lightCol = 0xffaa00; hp = 1; scale = 1.8;
+    } else if (typeRoll < 0.8) { // ATOMIC FIRE BULL (DEEP CRIMSON)
+       hullCol = 0x660000; lightCol = 0xff5500; hp = 5; scale = 3.5;
+    } else { // GHOST SPICY BULL (ORANGE-YELLOW)
+       hullCol = 0xff5500; lightCol = 0xffff00; hp = 2; scale = 2.2;
     }
 
-    // --- V90 CHIBI UFO DESIGN ---
+    // --- V97.0 FIRE BULL DESIGN (OPTIMIZED V97.1) ---
     const g = new THREE.Group();
-    const hullMat = new THREE.MeshStandardMaterial({ color: hullCol, metalness: 1.0, roughness: 0.2 });
-    const glassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, metalness: 1.0 });
-    const alienMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x00ff00, emissiveIntensity: 1.0 }); // V93
-    const lightMat = new THREE.MeshStandardMaterial({ color: lightCol, emissive: lightCol, emissiveIntensity: 2.0 }); // V93
+    const bullMat = new THREE.MeshStandardMaterial({ 
+        color: hullCol, map: fireBullTex, metalness: 0.2, roughness: 0.8, emissive: hullCol, emissiveIntensity: 0.05 // LOWERED V97.1
+    });
+    const hornMat = new THREE.MeshStandardMaterial({ color: 0xffffcc, metalness: 0.5 });
+    const flameMat = new THREE.MeshStandardMaterial({ color: lightCol, emissive: lightCol, emissiveIntensity: 2.0 });
 
-    // 1. UFO Hull (Disc)
-    const hull = new THREE.Mesh(new THREE.CylinderGeometry(12, 12, 3, 16), hullMat);
-    g.add(hull);
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(11, 2, 8, 24), hullMat);
-    rim.rotation.x = Math.PI/2; g.add(rim);
+    // 1. Bull Head (Decimated Sphere V97.1)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(12, 8, 8), bullMat);
+    g.add(head);
 
-    // 2. Dome (Glass)
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(6, 16, 8, 0, Math.PI*2, 0, Math.PI/2), glassMat);
-    dome.position.y = 1.5; g.add(dome);
+    // 2. Dual Horns (Decimated Cones V97.1)
+    for (let j = 0; j < 2; j++) {
+        const side = j === 0 ? 1 : -1;
+        const horn = new THREE.Mesh(new THREE.ConeGeometry(3, 10, 4), hornMat);
+        horn.position.set(side * 8, 8, -4);
+        horn.rotation.z = side * 0.4; horn.rotation.x = -0.4;
+        g.add(horn);
+    }
 
-    // 3. Alien Pilot
-    const head = new THREE.Mesh(new THREE.SphereGeometry(3, 8, 8), alienMat);
-    head.position.y = 3; g.add(head);
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
-    const lEye = new THREE.Mesh(new THREE.SphereGeometry(0.8, 8, 8), eyeMat);
-    lEye.position.set(-1.2, 3.5, 1.8); g.add(lEye);
-    const rEye = new THREE.Mesh(new THREE.SphereGeometry(0.8, 8, 8), eyeMat);
-    rEye.position.set(1.2, 3.5, 1.8); g.add(rEye);
+    // 3. Glowing Eyes (Spicy Glow)
+    for (let j = 0; j < 2; j++) {
+        const side = j === 0 ? 1 : -1;
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(2, 8, 8), flameMat);
+        eye.position.set(side * 4, 3, 10);
+        g.add(eye);
+    }
 
-    // 4. Energy Lights
-    for (let j = 0; j < 6; j++) {
-        const light = new THREE.Mesh(new THREE.SphereGeometry(1.2), lightMat);
-        const ang = (j / 6) * Math.PI * 2;
-        light.position.set(Math.cos(ang) * 11, 0, Math.sin(ang) * 11);
-        g.add(light);
+    // 4. Snout Smoke Points
+    for (let j = 0; j < 2; j++) {
+        const side = j === 0 ? 1 : -1;
+        const nose = new THREE.Mesh(new THREE.SphereGeometry(1.5, 4, 4), new THREE.MeshBasicMaterial({ color: 0x333333 }));
+        nose.position.set(side * 2, -4, 11);
+        g.add(nose);
     }
     
     const x = (Math.random() - 0.5) * 200, z = -500 - (Math.random() * 500);
     g.position.set(x, 10 + currentLevel * 2, z);
-    const ufoScale = isTouch ? 0.7 : 1.0; // V94.7 MOBILE SCALE
-    g.scale.setScalar(scale * ufoScale);
+    const bullScale = isTouch ? 0.7 : 1.0; 
+    g.scale.setScalar(scale * bullScale);
     scene.add(g);
 
     const body = new CANNON.Body({ mass: 1, shape: new CANNON.Sphere(12) });
@@ -573,7 +577,8 @@ function spawnEnemies(count) {
     physicsMeshes.push({ 
         mesh: g, body, type: 'enemy', hp, 
         isCarrier: (Math.random() < 0.20), 
-        fireTimer: 2 + Math.random() * 5 
+        fireTimer: 2 + Math.random() * 5,
+        flameCol: lightCol // V97.0 FX TRACKING
     });
     targetsRemaining++;
   }
@@ -620,7 +625,8 @@ function animate() {
           p.fireTimer -= delta;
           if (p.fireTimer <= 0) {
               const bCol = 0xff00ff;
-              const b = new THREE.Mesh(new THREE.SphereGeometry(3), new THREE.MeshStandardMaterial({ color: bCol, emissive: bCol, emissiveIntensity: 5.0 }));
+              // ENHANCED VISIBILITY V97.1 (SIZE 3 -> 5)
+              const b = new THREE.Mesh(new THREE.SphereGeometry(5, 6, 6), new THREE.MeshStandardMaterial({ color: bCol, emissive: bCol, emissiveIntensity: 5.0 }));
               b.position.copy(p.mesh.position); scene.add(b);
               const dir = new THREE.Vector3().subVectors(playerBody.position, b.position).normalize();
               // V94.4 MOBILE DIFFICULTY SCALE
@@ -631,6 +637,11 @@ function animate() {
           }
        }
        p.mesh.position.copy(p.body.position); p.mesh.quaternion.copy(p.body.quaternion);
+       
+       // V97.1 SPICY MIST (THROTTLED: 0.3 -> 0.05)
+       if (p.type === 'enemy' && Math.random() < 0.05) {
+           createExplosion(p.mesh.position, p.flameCol || 0xffaa00, 2, 0.15); 
+       }
     });
 
     // --- V93 COMBAT RESTORATION: LASER COLLISION ---
@@ -1103,6 +1114,21 @@ function handlePlayerHit() {
     }
 }
 
+function createExplosion(pos, col, count = 10, life = 0.5) {
+    const geo = new THREE.SphereGeometry(2, 4, 4);
+    for (let i = 0; i < count; i++) {
+        const mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.8 });
+        const p = new THREE.Mesh(geo, mat);
+        p.position.copy(pos);
+        scene.add(p);
+        particles.push({ 
+            mesh: p, 
+            velocity: new THREE.Vector3((Math.random()-0.5)*100, (Math.random()-0.5)*100, (Math.random()-0.5)*100), 
+            lifespan: life 
+        });
+    }
+}
+
 function spawnPowerup(pos, type) {
     const group = new THREE.Group();
     // V89 CRYSTALLINE DIAMOND CORE
@@ -1283,4 +1309,4 @@ window.handleContinue = () => {
 window.handleExit = () => {
     location.reload();
 };
-console.log("🚀 BOOT: V96.3 ONLINE - TACTICAL SHIELDING LOCK");
+console.log("🚀 BOOT: V97.1 ONLINE - NANOSYNTH OPTIMIZATION");
