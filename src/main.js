@@ -62,6 +62,7 @@ let lastHitTime = 0, bossFireTimer = 2.0; // V96.0 BOSS AI COOLDOWN
 let instructions, startButton, replayBtn, saveScoreBtn, playerNameInput, leaderboardList;
 let radarCanvas, radarCtx, bonusNotificationElement;
 let chibiTex, droneTex, forestTex, fireBullTex, adBannerTex; // V97.2 TEXTURES
+let billboardFrameGeo, billboardBannerGeo; // V97.3 GEOMETRY POOLING
 
 // --- Shaders ---
 const ChromaticAberrationShader = {
@@ -259,7 +260,11 @@ function initEngine() {
     forestTex.wrapS = forestTex.wrapT = THREE.RepeatWrapping;
     forestTex.repeat.set(10, 10);
     
-    console.info("??BOOT: SCENE & TEXTURES READY.");
+    // V97.3 POOLED GEOMETRY INITIALIZATION
+    billboardFrameGeo = new THREE.BoxGeometry(100, 60, 5);
+    billboardBannerGeo = new THREE.PlaneGeometry(90, 50);
+    
+    console.info("🚀BOOT: SCENE & TEXTURES READY.");
   } catch(e) { console.error("BOOSTER: SCENE FAILED", e); }
 
   try {
@@ -502,23 +507,20 @@ function renderEnvironment() {
 
 function spawnBillboard(z) {
     const group = new THREE.Group();
-    const frameGeo = new THREE.BoxGeometry(100, 60, 5);
     const frameMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9 });
-    const frame = new THREE.Mesh(frameGeo, frameMat);
+    const frame = new THREE.Mesh(billboardFrameGeo, frameMat); // POOLED V97.3
     group.add(frame);
 
-    const bannerGeo = new THREE.PlaneGeometry(90, 50);
     const bannerMat = new THREE.MeshStandardMaterial({ 
-        map: adBannerTex, emissive: 0xffffff, emissiveIntensity: 1.2, transparent: true 
+        map: adBannerTex, emissive: 0xffffff, emissiveIntensity: 2.5, transparent: true // BOOSTED V97.3
     });
-    const banner = new THREE.Mesh(bannerGeo, bannerMat);
+    const banner = new THREE.Mesh(billboardBannerGeo, bannerMat); // POOLED V97.3
     banner.position.z = 2.6; group.add(banner);
 
     const pole = new THREE.Mesh(new THREE.BoxGeometry(10, 150, 10), frameMat);
     pole.position.y = -75; group.add(pole);
 
-    const light = new THREE.PointLight(0x00ffff, 500, 200);
-    light.position.set(0, 40, 20); group.add(light);
+    // POINTLIGHT REMOVED V97.3 FOR 60FPS STABILITY
 
     group.position.set(Math.random() > 0.5 ? 250 : -250, 50, z);
     scene.add(group);
@@ -1343,4 +1345,4 @@ window.handleContinue = () => {
 window.handleExit = () => {
     location.reload();
 };
-console.log("🚀 BOOT: V97.2 ONLINE - GOURMET MARKETING SECTOR");
+console.log("🚀 BOOT: V97.3 ONLINE - HIGH-PERFORMANCE MARKETING");
