@@ -31,6 +31,7 @@ let playerShadow = null; // NEW XEVIOUS SHADOW V60
 let hypergate = null, groundPlane = null, terrainTexture = null;
 let enemyBullets = [];
 let audioCtx, mouseDeltaX = 0, mouseDeltaY = 0;
+let joyX = 0, joyY = 0; // V96.4 JOYSTICK STATE
 const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 window.respawnShieldTimer = 0; // V77 GLOBAL ANCHOR
 let isGameOver = false, gameStarted = false, isPaused = false; // V96.6 PAUSE SYSTEM
@@ -631,6 +632,12 @@ function animate() {
     world.step(timeStep, delta, 3); // V97.3 ACCURATE SUBSTEPPING FOR 120HZ
     
     updatePlayer(delta);
+    
+    // Smooth Joystick Return V96.4
+    if (Math.abs(joyX) > 0.01 || Math.abs(joyY) > 0.01) {
+        // Only decay if we aren't actively being dragged - for now let's just apply it
+    }
+
     if (weaponGroup && playerBody) weaponGroup.position.copy(playerBody.position); // V97.3 ATOMIC SYNC
     if (playerShadow && playerBody) {
         playerShadow.position.x = playerBody.position.x;
@@ -822,14 +829,61 @@ function animate() {
   composer.render();
 }
 
+// --- MOBILE VIRTUAL JOYSTICK V96.4 ---
+function initJoystick() {
+    const container = document.getElementById('joystick-container');
+    const thumb = document.getElementById('joystick-thumb');
+    if (!container || !thumb) return;
+
+    let active = false;
+    const baseRadius = 75;
+
+    const handleMove = (e) => {
+        if (!active) return;
+        const rect = container.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        
+        let clientX = e.clientX || (e.touches && e.touches[0].clientX);
+        let clientY = e.clientY || (e.touches && e.touches[0].clientY);
+
+        let dx = clientX - centerX;
+        let dy = clientY - centerY;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+
+        if (dist > baseRadius) {
+            dx *= baseRadius / dist;
+            dy *= baseRadius / dist;
+        }
+
+        joyX = dx / baseRadius;
+        joyY = dy / baseRadius;
+        thumb.style.transform = `translate(${dx}px, ${dy}px)`;
+    };
+
+    container.addEventListener('pointerdown', (e) => {
+        active = true;
+        container.setPointerCapture(e.pointerId);
+        handleMove(e);
+    });
+
+    window.addEventListener('pointermove', handleMove);
+
+    window.addEventListener('pointerup', (e) => {
+        active = false;
+        joyX = 0; joyY = 0;
+        thumb.style.transform = `translate(0px, 0px)`;
+    });
+}
+
 function updatePlayer() {
   if (isGameOver || !gameStarted || !playerBody) return;
   playerBody.position.y = 5;
   playerBody.velocity.y = 0;
 
   // --- ENHANCED MANEUVERABILITY V64 (2x SPEED) ---
-  const moveX = (keys['ArrowRight'] || keys['d'] ? 1 : 0) - (keys['ArrowLeft'] || keys['a'] ? 1 : 0);
-  const moveZ = (keys['ArrowDown'] || keys['s'] ? 1 : 0) - (keys['ArrowUp'] || keys['w'] ? 1 : 0);
+  const moveX = (keys['ArrowRight'] || keys['d'] ? 1 : 0) - (keys['ArrowLeft'] || keys['a'] ? 1 : 0) + joyX;
+  const moveZ = (keys['ArrowDown'] || keys['s'] ? 1 : 0) - (keys['ArrowUp'] || keys['w'] ? 1 : 0) + joyY;
   
   playerBody.position.x += moveX * 4;
   playerBody.position.z += moveZ * 4;
@@ -1336,6 +1390,7 @@ try {
   if (!window.isEngineInitialized) {
     initUI(); 
     initEngine();
+    if (isTouch) initJoystick(); // V96.4 JOYSTICK BOOT
     window.isEngineInitialized = true;
   }
   
