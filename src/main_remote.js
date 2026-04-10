@@ -1,4 +1,4 @@
-// --- Neon Surge 3D Game Engine ---
+﻿// --- Neon Surge 3D Game Engine ---
 // Consolidated and stabilized version V59.3
 window.onerror = (msg, url, line, col, error) => {
   const ps = document.getElementById('panic-screen');
@@ -24,8 +24,6 @@ import { BulletPool } from './bullets.js';
 // --- Globals & Engine ---
 let scene, camera, renderer, world, composer, bloomPass, controls;
 let clock = new THREE.Clock();
-window.isEngineInitialized = false; // V97.3 HMR GUARD
-let ufoHullGeo, ufoRimGeo, ufoDomeGeo, ufoHeadGeo, ufoEyeGeo, ufoLightGeo; // V97.3 POOLED GEOS
 let leftEngineGlow, rightEngineGlow, bombCooldown = 0, propellerGroup = null;
 let playerShadow = null; // NEW XEVIOUS SHADOW V60
 let hypergate = null, groundPlane = null, terrainTexture = null;
@@ -33,7 +31,9 @@ let enemyBullets = [];
 let audioCtx, mouseDeltaX = 0, mouseDeltaY = 0;
 const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 window.respawnShieldTimer = 0; // V77 GLOBAL ANCHOR
-let isGameOver = false, gameStarted = false, isPaused = false; // V96.6 PAUSE SYSTEM
+
+// --- Game State ---
+let isGameOver = false, gameStarted = false;
 let currentLevel = 0, score = 0, totalShots = 0, totalHits = 0, targetsRemaining = 0;
 let enemiesKilled = 0, enemiesRequired = 100; // V88 EXTENDED QUOTA (100)
 let bombCharge = 0; // V89 ION CHARGE SYSTEM
@@ -264,7 +264,7 @@ function initEngine() {
     billboardFrameGeo = new THREE.BoxGeometry(100, 60, 5);
     billboardBannerGeo = new THREE.PlaneGeometry(90, 50);
     
-    console.info("🚀BOOT: SCENE & TEXTURES READY.");
+    console.info("??BOOT: SCENE & TEXTURES READY.");
   } catch(e) { console.error("BOOSTER: SCENE FAILED", e); }
 
   try {
@@ -329,15 +329,6 @@ function initEngine() {
   enemyBulletPool = new BulletPool(scene, 500);
   renderLeaderboard(); 
   window.addEventListener('resize', onWindowResize);
-
-  // --- UFO GEOMETRY POOL V97.3 ---
-  ufoHullGeo = new THREE.CylinderGeometry(12, 12, 3, 16);
-  ufoRimGeo = new THREE.TorusGeometry(11, 2, 8, 24);
-  ufoDomeGeo = new THREE.SphereGeometry(6, 16, 8, 0, Math.PI*2, 0, Math.PI/2);
-  ufoHeadGeo = new THREE.SphereGeometry(3, 8, 8);
-  ufoEyeGeo = new THREE.SphereGeometry(0.8, 8, 8);
-  ufoLightGeo = new THREE.SphereGeometry(1.2, 8, 8);
-
   console.info("??BOOT: ENGINE COMPLETE.");
 }
 
@@ -568,41 +559,47 @@ function spawnEnemies(count) {
        hullCol = 0xff5500; lightCol = 0xffff00; hp = 2; scale = 2.2;
     }
 
-    // --- V90 CHIBI UFO DESIGN (POOLED V97.3) ---
+    // --- V97.0 FIRE BULL DESIGN (OPTIMIZED V97.1) ---
     const g = new THREE.Group();
-    const hullMat = new THREE.MeshStandardMaterial({ color: hullCol, metalness: 1.0, roughness: 0.2 });
-    const glassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, metalness: 1.0 });
-    const alienMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x00ff00, emissiveIntensity: 1.0 }); 
-    const lightMat = new THREE.MeshStandardMaterial({ color: lightCol, emissive: lightCol, emissiveIntensity: 2.0 }); 
+    const bullMat = new THREE.MeshStandardMaterial({ 
+        color: hullCol, map: fireBullTex, metalness: 0.2, roughness: 0.8, emissive: hullCol, emissiveIntensity: 0.05 // LOWERED V97.1
+    });
+    const hornMat = new THREE.MeshStandardMaterial({ color: 0xffffcc, metalness: 0.5 });
+    const flameMat = new THREE.MeshStandardMaterial({ color: lightCol, emissive: lightCol, emissiveIntensity: 2.0 });
 
-    g.add(new THREE.Mesh(ufoHullGeo, hullMat));
-    const rim = new THREE.Mesh(ufoRimGeo, hullMat);
-    rim.rotation.x = Math.PI/2; g.add(rim);
+    // 1. Bull Head (Decimated Sphere V97.1)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(12, 8, 8), bullMat);
+    g.add(head);
 
-    const dome = new THREE.Mesh(ufoDomeGeo, glassMat);
-    dome.position.y = 1.5; g.add(dome);
+    // 2. Dual Horns (Decimated Cones V97.1)
+    for (let j = 0; j < 2; j++) {
+        const side = j === 0 ? 1 : -1;
+        const horn = new THREE.Mesh(new THREE.ConeGeometry(3, 10, 4), hornMat);
+        horn.position.set(side * 8, 8, -4);
+        horn.rotation.z = side * 0.4; horn.rotation.x = -0.4;
+        g.add(horn);
+    }
 
-    const head = new THREE.Mesh(ufoHeadGeo, alienMat);
-    head.position.y = 3; g.add(head);
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
-    const lEye = new THREE.Mesh(ufoEyeGeo, eyeMat);
-    lEye.position.set(-1.2, 3.5, 1.8); g.add(lEye);
-    const rEye = new THREE.Mesh(ufoEyeGeo, eyeMat);
-    rEye.position.set(1.2, 3.5, 1.8); g.add(rEye);
+    // 3. Glowing Eyes (Spicy Glow)
+    for (let j = 0; j < 2; j++) {
+        const side = j === 0 ? 1 : -1;
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(2, 8, 8), flameMat);
+        eye.position.set(side * 4, 3, 10);
+        g.add(eye);
+    }
 
-    for (let j = 0; j < 8; j++) {
-        const angle = (j / 8) * Math.PI * 2;
-        const beam = new THREE.Mesh(ufoLightGeo, lightMat);
-        beam.position.set(Math.cos(angle) * 11, 0, Math.sin(angle) * 11);
-        g.add(beam);
+    // 4. Snout Smoke Points
+    for (let j = 0; j < 2; j++) {
+        const side = j === 0 ? 1 : -1;
+        const nose = new THREE.Mesh(new THREE.SphereGeometry(1.5, 4, 4), new THREE.MeshBasicMaterial({ color: 0x333333 }));
+        nose.position.set(side * 2, -4, 11);
+        g.add(nose);
     }
     
     const x = (Math.random() - 0.5) * 200, z = -500 - (Math.random() * 500);
     g.position.set(x, 10 + currentLevel * 2, z);
-
-    // V97.3 MOBILE COMPACT SCALING (40% REDUCTION)
-    const mobileScale = isTouch ? 0.6 : 1.0;
-    g.scale.setScalar(scale * mobileScale);
+    const bullScale = isTouch ? 0.7 : 1.0; 
+    g.scale.setScalar(scale * bullScale);
     scene.add(g);
 
     const body = new CANNON.Body({ mass: 1, shape: new CANNON.Sphere(12) });
@@ -624,19 +621,11 @@ function animate() {
   let delta = clock.getDelta();
   if (delta > 0.1) delta = 0.016;
 
-  if (gameStarted && !isGameOver && !isContinueMenu && !isPaused) {
+  if (gameStarted && !isGameOver && !isContinueMenu) {
     if (hitStopTimer > 0) { hitStopTimer -= delta; if (hitStopTimer <= 0) hitStopTimer = 0; }
 
-    const timeStep = 1/60;
-    world.step(timeStep, delta, 3); // V97.3 ACCURATE SUBSTEPPING FOR 120HZ
-    
-    updatePlayer(delta);
-    if (weaponGroup && playerBody) weaponGroup.position.copy(playerBody.position); // V97.3 ATOMIC SYNC
-    if (playerShadow && playerBody) {
-        playerShadow.position.x = playerBody.position.x;
-        playerShadow.position.z = playerBody.position.z;
-    }
-
+    world.step(1/60, delta);
+    updatePlayer();
     if (propellerGroup) propellerGroup.rotation.z += delta * 25;
     
     [particles, laserBeams].forEach(list => {
@@ -973,7 +962,7 @@ function startGame() {
   lives = 3; shield = 3; weaponLevel = 1;
   window.respawnShieldTimer = 6.0; // V90 STARTUP RECOVERY (EXTENDED)
   bombCharge = 0; // RESET ION CHARGE
-  console.warn("🚀 MISSION START: V91 ABSOLUTE LOCKDOWN");
+  console.warn("?? MISSION START: V91 ABSOLUTE LOCKDOWN");
   
   // ATOMIC COORDINATE RESET V74
   if (playerBody) {
@@ -1128,7 +1117,7 @@ function updateHUDMarkers() {
 function handlePlayerHit() {
     // V76 ABSOLUTE PRIORITY CHECK
     if (window.respawnShieldTimer > 0) {
-        console.warn("🛡️ SHIELD BLOCKED HIT | REMAINING: " + window.respawnShieldTimer.toFixed(2));
+        console.warn("?썳截?SHIELD BLOCKED HIT | REMAINING: " + window.respawnShieldTimer.toFixed(2));
         return;
     }
 
@@ -1138,7 +1127,7 @@ function handlePlayerHit() {
     if (Date.now() - lastHitTime < 1000) return;
     lastHitTime = Date.now();
     
-    console.warn("⚠️ DAMAGE TAKEN! | LIVES: " + lives + " | ARMOR: " + shield);
+    console.warn("?좑툘 DAMAGE TAKEN! | LIVES: " + lives + " | ARMOR: " + shield);
     hitStopTimer = 0.1; // V77 HIT STOP FRAME
 
     shield--;
@@ -1153,7 +1142,7 @@ function handlePlayerHit() {
         } else {
             shield = 3; weaponLevel = 1; // RESET WEAPON ON LIFE LOSS V69
             playerBody.position.set(0, 5, 50);
-            window.respawnShieldTimer = 1.5; // V97.3 HARDCORE SHIELD (1.5S PULSE)
+            window.respawnShieldTimer = 3.0; // RESET GUARDIAN SHIELD V74
         }
     } else {
         playArmorCrunchSound(); // NEW IMPACT SOUND V65
@@ -1223,7 +1212,7 @@ function spawnMothership() {
 
     // V84/V94.7 CHIBI-SCALE REMOTE POSITIONING
     g.position.set(0, 50, -1000); // LOWERED FOR IPAD VISIBILITY V96.0
-    const bScale = isTouch ? 1.5 : 3.0; // V97.3 HARDCORE COMPACT BOSS (3.0 -> 1.5)
+    const bScale = isTouch ? 2.1 : 3.0; // V94.7 MOBILE BOSS SCALE (30% REDUCTION)
     g.scale.setScalar(bScale); scene.add(g);
     const pBody = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(450, 40, 450)) }); // KINEMATIC V84
     pBody.position.copy(g.position); world.addBody(pBody);
@@ -1285,7 +1274,7 @@ function handleContinue() {
     playerBody.position.set(0, 5, 50);
     const go = document.getElementById('game-over');
     if (go) go.style.display = 'none';
-    window.respawnShieldTimer = 1.5; // V97.3 HARDCORE INVULNERABILITY (3S -> 1.5S)
+    window.respawnShieldTimer = 3.0; // 3S INVULNERABILITY
 }
 
 function handleExit() {
@@ -1333,20 +1322,11 @@ function detonateBomb() {
 }
 
 try {
-  if (!window.isEngineInitialized) {
-    initUI(); 
-    initEngine();
-    window.isEngineInitialized = true;
-  }
-  
+  initUI(); initEngine();
   playerBody = new CANNON.Body({ mass: 5, shape: new CANNON.Sphere(1) });
   playerBody.position.set(0, 5, 50); // CENTER-BOTTOM FRUSTUM ALIGNMENT V60.5
   world.addBody(playerBody);
-  
-  if (controls && !isTouch) {
-     try { controls.lock(); } catch(e) { console.error("Lock Fail:", e); }
-  }
-  
+  try { controls.lock(); } catch(e) { console.error("Lock Fail:", e); }
   animate();
 } catch (err) { 
   console.error("??ENGINE ERROR:", err); 
@@ -1365,4 +1345,4 @@ window.handleContinue = () => {
 window.handleExit = () => {
     location.reload();
 };
-console.log("🚀 BOOT: V97.3 ONLINE - OPTIMIZED ELITE SQUADRON");
+console.log("?? BOOT: V97.3 ONLINE - HIGH-PERFORMANCE MARKETING");
