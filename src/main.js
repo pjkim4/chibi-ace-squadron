@@ -999,7 +999,7 @@ function startGame() {
   laserBeams.forEach(l => scene.remove(l.mesh)); laserBeams = [];
   
   gameStarted = true; isGameOver = false; isContinueMenu = false; // RESET STATE V72
-  score = 0; currentLevel = 0; enemiesKilled = 0; enemiesRequired = 100; // V88 EXTENDED QUOTA (RESET)
+  score = 0; currentLevel = -1; enemiesKilled = 0; enemiesRequired = 50; // V97.12 STARTUP FIX
   lives = 3; shield = 3; weaponLevel = 1;
   window.respawnShieldTimer = 6.0; // V90 STARTUP RECOVERY (EXTENDED)
   bombCharge = 0; // RESET ION CHARGE
