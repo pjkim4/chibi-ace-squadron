@@ -828,11 +828,11 @@ function initJoystick() {
     const thumb = document.getElementById('joystick-thumb');
     if (!container || !thumb) return;
 
-    let active = false;
+    let active = false, joyPointerId = null;
     const baseRadius = 75;
 
     const handleMove = (e) => {
-        if (!active) return;
+        if (!active || e.pointerId !== joyPointerId) return;
         const rect = container.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;
         const centerY = rect.top + rect.height / 2;
@@ -856,6 +856,7 @@ function initJoystick() {
 
     container.addEventListener('pointerdown', (e) => {
         active = true;
+        joyPointerId = e.pointerId;
         container.setPointerCapture(e.pointerId);
         handleMove(e);
     });
@@ -863,9 +864,12 @@ function initJoystick() {
     window.addEventListener('pointermove', handleMove);
 
     window.addEventListener('pointerup', (e) => {
-        active = false;
-        joyX = 0; joyY = 0;
-        thumb.style.transform = `translate(0px, 0px)`;
+        if (e.pointerId === joyPointerId) {
+            active = false;
+            joyPointerId = null;
+            joyX = 0; joyY = 0;
+            thumb.style.transform = `translate(0px, 0px)`;
+        }
     });
 }
 
@@ -957,42 +961,22 @@ window.addEventListener('keyup', (e) => {
 });
 window.addEventListener('mousedown', e => { if (gameStarted && !isGameOver) fireLaser(); });
 
-// --- MOBILE ELITE CONTROLS (POINTER EVENTS) V96.3 ---
-let lastTouchX = 0, lastTouchY = 0, movePointerId = null;
+// --- MOBILE ELITE CONTROLS (POINTER EVENTS) V97.9 ---
+// Dedicated Fire for non-joystick touches
 window.addEventListener('pointerdown', e => {
   if (!gameStarted || isGameOver || e.pointerType === 'mouse') return;
-  // ATOMIC LOCK V96.3: Use setPointerCapture to stay sticky on maneuvers
-  if (movePointerId === null) {
-    movePointerId = e.pointerId;
-    lastTouchX = e.clientX; lastTouchY = e.clientY;
-    try { e.target.setPointerCapture(e.pointerId); } catch(err) {} 
-  }
-}, { passive: false });
-
-window.addEventListener('pointermove', e => {
-  if (movePointerId !== e.pointerId || !playerBody) return;
-  e.preventDefault();
-  
-  const dx = e.clientX - lastTouchX;
-  const dy = e.clientY - lastTouchY;
-  
-  // NaN SHIELDING V96.3
-  if (Number.isFinite(dx) && Number.isFinite(dy)) {
-    playerBody.position.x += dx * 0.45;
-    playerBody.position.z += dy * 0.45;
-    lastTouchX = e.clientX; lastTouchY = e.clientY;
+  // If touch is NOT on the joystick container, trigger fire
+  const joy = document.getElementById('joystick-container');
+  if (joy && !joy.contains(e.target)) {
+     fireLaser();
   }
 }, { passive: false });
 
 const releasePointer = e => {
-    if (e.pointerId === movePointerId) {
-        try { e.target.releasePointerCapture(e.pointerId); } catch(err) {}
-        movePointerId = null;
-    }
+    // Shared release logic if needed
 };
 window.addEventListener('pointerup', releasePointer);
 window.addEventListener('pointercancel', releasePointer);
-window.addEventListener('pointerout', releasePointer);
 // GLOBAL COCKPIT LOCK V95.4
 document.addEventListener('touchmove', e => { if (e.touches.length > 1 || e.scale !== 1) e.preventDefault(); }, { passive: false });
 document.addEventListener('touchstart', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
