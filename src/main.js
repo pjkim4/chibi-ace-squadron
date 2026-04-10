@@ -56,6 +56,7 @@ let floorMaterial, skybox, chromAbPass;
 let hudCanvas, hudCtx, shakeAmount = 0, chromAbTarget = 0.0015;
 let energyCore, weaponSideFins = [], weaponEngines = [], shieldMesh = null; // V80 SHIELD MESH
 let spaceDust, isLevelAdvancing = false, globalFireTimer = 3.5; // V80 WAVE TIMING
+let stageClearedTimer = 0, clearedStageNumber = 0; // V97.6 GHOST UI FIX
 let engineHumOsc, engineHumGain, navArrow, controlStick, targetingLine;
 let lastHitTime = 0, bossFireTimer = 2.0; // V96.0 BOSS AI COOLDOWN
 
@@ -597,7 +598,9 @@ function spawnEnemies(count) {
 
 function animate() {
   requestAnimationFrame(animate);
-  let delta = clock.getDelta();
+    const delta = clock.getDelta() * timeDilation;
+    elapsedTime += delta;
+    if (stageClearedTimer > 0) stageClearedTimer -= delta; // V97.6 TIMER DECAY
   if (delta > 0.1) delta = 0.016;
 
   if (gameStarted && !isGameOver && !isContinueMenu && !isPaused) {
@@ -775,16 +778,18 @@ function animate() {
         if (shieldMesh) shieldMesh.visible = false;
     }
 
-    if (enemiesKilled >= enemiesRequired && !isLevelAdvancing) {
-        isLevelAdvancing = true;
-        // V94.8 INSTANT RADAR SHUTDOWN
-        bossActive = false; bossMesh = null;
-        setTimeout(() => { 
-            advanceLevel(); 
-            isLevelAdvancing = false; 
-            if ((currentLevel + 1) % 5 === 0) spawnMothership(); // BOSS AT EVERY 5TH STAGE V95.5
-        }, 3000); 
-    }
+     if (enemiesKilled >= enemiesRequired && !isLevelAdvancing) {
+         isLevelAdvancing = true;
+         stageClearedTimer = 3.5; // V97.6 ACTIVATE SELF-EXPIRING HUD
+         clearedStageNumber = currentLevel + 1;
+         // V94.8 INSTANT RADAR SHUTDOWN
+         bossActive = false; bossMesh = null;
+         setTimeout(() => { 
+             advanceLevel(); 
+             isLevelAdvancing = false; 
+             if ((currentLevel + 1) % 5 === 0) spawnMothership(); // BOSS AT EVERY 5TH STAGE V95.5
+         }, 3000); 
+     }
 
     updateHUDMarkers();
     physicsMeshes = physicsMeshes.filter(p => !p.toDelete);
@@ -1112,14 +1117,16 @@ function updateHUDMarkers() {
       hudCtx.fillText(bombCharge >= 100 ? "BOMB READY [SPACE]" : "IONIZING BOMB...", hudCanvas.width - 250, 35);
   }
 
-  // V94.3 MISSION COMPLETE CELEBRATION
-  if (isLevelAdvancing) {
+  // V94.3 MISSION COMPLETE CELEBRATION (FIXED WITH SELF-EXPIRING TIMER V97.6)
+  if (stageClearedTimer > 0) {
       hudCtx.fillStyle = "#00ffff"; hudCtx.font = "bold 60px Orbitron"; hudCtx.textAlign = "center";
       hudCtx.shadowBlur = 20; hudCtx.shadowColor = "#00ffff";
-      hudCtx.fillText(`STAGE ${currentLevel+1} CLEARED`, hudCanvas.width/2, hudCanvas.height/2);
+      hudCtx.globalAlpha = Math.min(1.0, stageClearedTimer); // FADE OUT V97.6
+      hudCtx.fillText(`STAGE ${clearedStageNumber} CLEARED`, hudCanvas.width/2, hudCanvas.height/2);
       hudCtx.font = "bold 24px Orbitron";
       hudCtx.fillText("SCANNING NEXT SECTOR...", hudCanvas.width/2, hudCanvas.height/2 + 60);
       hudCtx.shadowBlur = 0; hudCtx.textAlign = "left";
+      hudCtx.globalAlpha = 1.0;
   }
 
   // V89/V94.8 BOSS HEALTH RADAR (ACCURATE DENOMINATOR)
