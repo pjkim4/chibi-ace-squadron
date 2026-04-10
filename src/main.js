@@ -57,6 +57,7 @@ let hudCanvas, hudCtx, shakeAmount = 0, chromAbTarget = 0.0015;
 let energyCore, weaponSideFins = [], weaponEngines = [], shieldMesh = null; // V80 SHIELD MESH
 let spaceDust, isLevelAdvancing = false, globalFireTimer = 3.5; // V80 WAVE TIMING
 let stageClearedTimer = 0, clearedStageNumber = 0; // V97.6 GHOST UI FIX
+let lastEnemyActiveTime = Date.now(); // V97.8 STALL PREVENTION
 let engineHumOsc, engineHumGain, navArrow, controlStick, targetingLine;
 let lastHitTime = 0, bossFireTimer = 2.0; // V96.0 BOSS AI COOLDOWN
 
@@ -253,12 +254,17 @@ function initEngine() {
     scene.background = new THREE.Color(0x020205);
     scene.fog = null; // NO FOG V59
 
+    // V97.8 PROCEDURAL ASSET SYSTEM (FIX 404 STALLS)
+    chibiTex = null; 
+    droneTex = null;
+    forestTex = null;
+    fireBullTex = null;
+    
+    // Mothership Card is the only remains
     const texLoader = new THREE.TextureLoader();
-    chibiTex = texLoader.load('chibi_skin.png');
-    droneTex = texLoader.load('drone_skin.png');
-    forestTex = texLoader.load('forest_ground.png');
-    fireBullTex = texLoader.load('fire_bull.png'); // V97.0 GOURMET ASSET
-    adBannerTex = texLoader.load('fire_bull_banner.png'); // V97.2 ADVERTISING
+    try {
+        adBannerTex = texLoader.load('fire_bull_banner.png');
+    } catch(e) {}
     forestTex.wrapS = forestTex.wrapT = THREE.RepeatWrapping;
     forestTex.repeat.set(10, 10);
     
@@ -424,7 +430,14 @@ function createWeapon() {
   weaponGroup = new THREE.Group();
   weaponGroup.scale.setScalar(14.0); // ULTIMATE SUPER-CHIBI SCALE V62
 
-  const silverMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.6, roughness: 0.3, map: chibiTex }); // TEXTURED HULL V68
+  // V97.8 PROCEDURAL CHIBI SKIN (NEON CHROME)
+  const silverMat = new THREE.MeshStandardMaterial({ 
+      color: 0x00ffff, 
+      metalness: 0.95, 
+      roughness: 0.1,
+      emissive: 0x00ffff,
+      emissiveIntensity: 0.4
+  });
   const yellowMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, emissive: 0xffaa00, emissiveIntensity: 1.0 }); // GLOWING ENGINE V60.9
   const redMat = new THREE.MeshStandardMaterial({ color: 0xaa0000 });
   const glassMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.6 });
@@ -435,7 +448,8 @@ function createWeapon() {
   hull.rotation.x = Math.PI / 2; hull.position.z = 0.1;
   hullGroup.add(hull);
 
-  const cowl = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.3, 16), new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 }));
+  const cowlMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 1.0 });
+  const cowl = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.3, 16), cowlMat);
   cowl.rotation.x = Math.PI / 2; cowl.position.z = -0.45;
   hullGroup.add(cowl);
   weaponGroup.add(hullGroup);
@@ -534,10 +548,16 @@ function spawnEnemies(count) {
 
     // --- V90 CHIBI UFO DESIGN (POOLED V97.3) ---
     const g = new THREE.Group();
-    const hullMat = new THREE.MeshStandardMaterial({ color: hullCol, metalness: 1.0, roughness: 0.2 });
+    const hullMat = new THREE.MeshStandardMaterial({ 
+        color: hullCol, 
+        metalness: 0.9, 
+        roughness: 0.2,
+        emissive: hullCol,
+        emissiveIntensity: 0.2
+    });
     const glassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, metalness: 1.0 });
-    const alienMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x00ff00, emissiveIntensity: 1.0 }); 
-    const lightMat = new THREE.MeshStandardMaterial({ color: lightCol, emissive: lightCol, emissiveIntensity: 2.0 }); 
+    const alienMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x00ff00, emissiveIntensity: 1.2 }); 
+    const lightMat = new THREE.MeshStandardMaterial({ color: lightCol, emissive: lightCol, emissiveIntensity: 2.5 }); 
 
     g.add(new THREE.Mesh(ufoHullGeo, hullMat));
     const rim = new THREE.Mesh(ufoRimGeo, hullMat);
@@ -620,8 +640,16 @@ function animate() {
     });
 
     const activeEnemies = physicsMeshes.filter(p=>p.type==='enemy' && !p.toDelete).length;
-    if (activeEnemies < 8 && (enemiesKilled + activeEnemies) < enemiesRequired) { // V94.2 POPULATION CONTROL
-        spawnEnemies(3); 
+    
+    // V97.8 GUARDIAN PULSE (STALL PREVENTION)
+    if (activeEnemies > 0) lastEnemyActiveTime = Date.now();
+    const stallTime = (Date.now() - lastEnemyActiveTime) / 1000;
+    
+    if (gameStarted && !isGameOver && !isLevelAdvancing) {
+        if ( (activeEnemies < 8 && (enemiesKilled + activeEnemies) < enemiesRequired) || (activeEnemies === 0 && stallTime > 5.0) ) {
+            spawnEnemies(activeEnemies === 0 && stallTime > 5.0 ? 5 : 3);
+            if (activeEnemies === 0 && stallTime > 5.0) lastEnemyActiveTime = Date.now(); // RESET PULSE
+        }
     }
 
     physicsMeshes.forEach(p => {
