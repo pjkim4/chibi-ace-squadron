@@ -35,7 +35,7 @@ let joyX = 0, joyY = 0; // V96.4 JOYSTICK STATE
 const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 window.respawnShieldTimer = 0; // V77 GLOBAL ANCHOR
 let isGameOver = false, gameStarted = false, isPaused = false; // V96.6 PAUSE SYSTEM
-let currentLevel = 0, score = 0, totalShots = 0, totalHits = 0, targetsRemaining = 0;
+let currentLevel = 0, score = 0, totalShots = 0, totalHits = 0;
 let enemiesKilled = 0, enemiesRequired = 100; // V88 EXTENDED QUOTA (100)
 let bombCharge = 0; // V89 ION CHARGE SYSTEM
 let comboMultiplier = 1, comboTimer = 0, stageStartTime = Date.now();
@@ -517,20 +517,7 @@ function renderEnvironment() {
 
 let bossActive = false, bossMesh = null, bossHealth = 100;
 
-function tickSpawner(delta) {
-  if (bossActive || !gameStarted || isGameOver || isLevelAdvancing) return;
-  
-  spawnTimer -= delta;
-  if (spawnTimer <= 0) {
-    // Stage 1 arrival, 5, 10... V66
-    if (currentLevel > 0 && (currentLevel === 1 || currentLevel % 5 === 0) && !bossActive && targetsRemaining <= 0) {
-      spawnMothership();
-    } else if (targetsRemaining < 10 + currentLevel * 5) {
-      spawnEnemies(1); 
-    }
-    spawnTimer = 2.0 - Math.min(1.5, currentLevel * 0.1); 
-  }
-}
+// --- V97.7 SPAWNER CENTRALIZED ---
 
 function spawnEnemies(count) {
   for (let i = 0; i < count; i++) {
@@ -640,7 +627,7 @@ function animate() {
     physicsMeshes.forEach(p => {
        if (p.type === 'enemy') {
           if (window.respawnShieldTimer <= 0 && p.mesh.position.distanceTo(weaponGroup.position) < 35) {
-             handlePlayerHit(); scene.remove(p.mesh); world.removeBody(p.body); p.toDelete = true; targetsRemaining--;
+             handlePlayerHit(); scene.remove(p.mesh); world.removeBody(p.body); p.toDelete = true;
           }
           const distToPlayer = p.mesh.position.distanceTo(weaponGroup.position);
           p.body.position.y += ((distToPlayer < 100 ? 8 : 12) - p.body.position.y) * delta * 2;
@@ -766,8 +753,6 @@ function animate() {
     }); activeNukes = activeNukes.filter(n => !n.toDelete);
 
     if (score >= nextLifeScore) { lives++; nextLifeScore += 200000; playExtendSound(); }
-
-    tickSpawner(delta); 
 
     if (window.respawnShieldTimer > 0) {
         window.respawnShieldTimer -= delta;
@@ -1023,6 +1008,7 @@ function startGame() {
 function advanceLevel() {
   currentLevel++; 
   enemiesKilled = 0; // V86 ATOMIC QUOTA RESET
+  enemiesRequired = 50 + (currentLevel + 1) * 25; // SCALE QUOTA V97.7
   stageStartTime = Date.now();
   
   // V94.7 ATOMIC HUD RESET (CLEAR BOSS GHOST)
