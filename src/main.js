@@ -523,10 +523,6 @@ function renderEnvironment() {
   playerShadow.rotation.x = -Math.PI / 2;
   playerShadow.position.y = -49.5;
   scene.add(playerShadow);
-    scene.add(group);
-    
-    // Track for movement logic
-    physicsMeshes.push({ mesh: group, body: { position: group.position, quaternion: group.quaternion }, type: 'billboard' });
 }
 
 let bossActive = false, bossMesh = null, bossHealth = 100;
@@ -797,11 +793,14 @@ function animate() {
          clearedStageNumber = currentLevel + 1;
          // V94.8 INSTANT RADAR SHUTDOWN
          bossActive = false; bossMesh = null;
-         setTimeout(() => { 
-             advanceLevel(); 
-             isLevelAdvancing = false; 
-             if ((currentLevel + 1) % 5 === 0) spawnMothership(); // BOSS AT EVERY 5TH STAGE V95.5
-         }, 3000); 
+          setTimeout(() => { 
+              try {
+                  advanceLevel(); 
+              } finally {
+                  isLevelAdvancing = false; 
+              }
+              if ((currentLevel + 1) % 5 === 0) spawnMothership(); // BOSS AT EVERY 5TH STAGE V95.5
+          }, 3000); 
      }
 
     updateHUDMarkers();
@@ -1030,16 +1029,27 @@ function advanceLevel() {
   if (playerShadow) scene.remove(playerShadow);
   
   switch (currentLevel % 3) {
-    case 1: // FOREST
-      scene.background = new THREE.Color(0x000510);
-      floorMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, map: forestTex }); // TEXTURED FLOOR V68
-      const planeGeo = new THREE.PlaneGeometry(2000, 2000);
+    case 1: // FOREST SECTOR
+      scene.background = new THREE.Color(0x001100);
+      floorMaterial = new THREE.MeshStandardMaterial({ color: 0x224422, metalness: 0.8 }); 
+      break;
+    case 2: // DEEP VOID
+      scene.background = new THREE.Color(0x050010);
+      floorMaterial = new THREE.MeshStandardMaterial({ color: 0x110022, metalness: 1.0 });
+      break;
+    default: // NEON CITY
+      scene.background = new THREE.Color(0x020205);
+      floorMaterial = new THREE.MeshStandardMaterial({ color: 0x050510, metalness: 0.9 });
       break;
   }
   
-  renderEnvironment();
-  physicsMeshes.forEach(p => { scene.remove(p.mesh); world.removeBody(p.body); });
-  physicsMeshes = [];
+  try {
+      renderEnvironment();
+      physicsMeshes.forEach(p => { scene.remove(p.mesh); world.removeBody(p.body); });
+      physicsMeshes = [];
+  } catch(err) {
+      console.error("V97.10 Transition Error:", err);
+  }
   
   // V75/V94.2 STRATEGIC DELAY & POPULATION CONTROL
   setTimeout(() => {
