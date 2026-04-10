@@ -1095,7 +1095,7 @@ function updateHUDMarkers() {
   
   // HUD AESTHETIC V63
   hudCtx.fillStyle = "white"; hudCtx.font = "bold 20px Orbitron";
-  hudCtx.fillText(`STAGE: ${currentLevel} | LIVES: ${lives} | SCORE: ${score}`, 20, 60);
+  hudCtx.fillText(`STAGE: ${currentLevel + 1} | LIVES: ${lives} | SCORE: ${score}`, 20, 60);
   
   // EXTEND NOTIFICATION V66
   if (score > nextLifeScore - 10000) {
@@ -1320,7 +1320,7 @@ function triggerGameOver(reason) {
         if (desktopHint) desktopHint.style.display = 'none';
     }
     const fs = document.getElementById('final-stats');
-    if (fs) fs.innerHTML = `<h3 style="color:#0ff">${reason}</h3><h4>STAGE REACHED: ${currentLevel}</h4>`;
+    if (fs) fs.innerHTML = `<h3 style="color:#0ff">${reason}</h3><h4>SECTORS CLEARED: ${currentLevel}</h4><h4>LAST SECTOR: ${currentLevel + 1}</h4>`;
   }
 }
 
