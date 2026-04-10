@@ -508,31 +508,6 @@ function renderEnvironment() {
   playerShadow.rotation.x = -Math.PI / 2;
   playerShadow.position.y = -49.5;
   scene.add(playerShadow);
-
-  // V97.2 GOURMET BILLBOARD SYSTEM
-  for (let i = 0; i < 6; i++) {
-     spawnBillboard(-500 - (i * 1500));
-  }
-}
-
-function spawnBillboard(z) {
-    const group = new THREE.Group();
-    const frameMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9 });
-    const frame = new THREE.Mesh(billboardFrameGeo, frameMat); // POOLED V97.3
-    group.add(frame);
-
-    const bannerMat = new THREE.MeshStandardMaterial({ 
-        map: adBannerTex, emissive: 0xffffff, emissiveIntensity: 2.5, transparent: true // BOOSTED V97.3
-    });
-    const banner = new THREE.Mesh(billboardBannerGeo, bannerMat); // POOLED V97.3
-    banner.position.z = 2.6; group.add(banner);
-
-    const pole = new THREE.Mesh(new THREE.BoxGeometry(10, 150, 10), frameMat);
-    pole.position.y = -75; group.add(pole);
-
-    // POINTLIGHT REMOVED V97.3 FOR 60FPS STABILITY
-
-    group.position.set(Math.random() > 0.5 ? 250 : -250, 50, z);
     scene.add(group);
     
     // Track for movement logic
